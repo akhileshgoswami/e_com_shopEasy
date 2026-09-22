@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% import "partials/product_card.html" as pc %}
+{% import "partials/pagination.html" as pg %}
+
+{% block title %}{{ category.name }} - {{ site_name }}{% endblock %}
+{% block meta_description %}Shop {{ category.name }} online. {{ category.description or '' }}{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <nav aria-label="breadcrumb"><ol class="breadcrumb small">
+    <li class="breadcrumb-item"><a href="{{ url_for('shop.home') }}">Home</a></li>
+    <li class="breadcrumb-item active">{{ category.name }}</li>
+  </ol></nav>
+
+  <h1 class="h3 mb-2">{{ category.name }}</h1>
+  {% if category.description %}<p class="text-muted">{{ category.description }}</p>{% endif %}
+
+  {% if subcategories %}
+  <div class="d-flex flex-wrap gap-2 mb-4">
+    {% for sub in subcategories %}
+    <a href="{{ url_for('shop.subcategory_detail', category_slug=category.slug, subcategory_slug=sub.slug) }}" class="btn btn-outline-secondary btn-sm rounded-pill">{{ sub.name }}</a>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <span class="text-muted small">{{ pagination.total }} product(s)</span>
+    <form method="get" class="d-flex align-items-center gap-2">
+      <label class="small text-muted mb-0" for="sort">Sort</label>
+      <select name="sort" id="sort" class="form-select form-select-sm" onchange="this.form.submit()">
+        <option value="newest" {{ 'selected' if sort == 'newest' }}>Newest</option>
+        <option value="price_low" {{ 'selected' if sort == 'price_low' }}>Price: Low to High</option>
+        <option value="price_high" {{ 'selected' if sort == 'price_high' }}>Price: High to Low</option>
+        <option value="name_asc" {{ 'selected' if sort == 'name_asc' }}>Name A-Z</option>
+      </select>
+    </form>
+  </div>
+
+  {% if products %}
+  <div class="row g-3">
+    {% for product in products %}{{ pc.product_card(product) }}{% endfor %}
+  </div>
+  {{ pg.render_pagination(pagination, 'shop.category_detail', category_slug=category.slug, sort=sort) }}
+  {% else %}
+  <p class="text-muted py-5 text-center">No products found in this category yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

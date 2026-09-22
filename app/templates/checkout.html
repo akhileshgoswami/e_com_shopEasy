@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}Checkout - {{ site_name }}{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <h1 class="h3 mb-4">Checkout</h1>
+
+  <form action="{{ url_for('checkout.place_order') }}" method="post" id="checkoutForm">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="row g-4">
+      <div class="col-lg-8">
+
+        <div class="card mb-4">
+          <div class="card-header fw-semibold"><i class="bi bi-geo-alt"></i> Shipping address</div>
+          <div class="card-body">
+            {% if addresses %}
+            <div class="row g-2 mb-3">
+              {% for address in addresses %}
+              <div class="col-md-6">
+                <label class="border rounded p-3 d-block address-option" style="cursor:pointer;">
+                  <input type="radio" name="address_id" value="{{ address.id }}" class="form-check-input me-2" {{ 'checked' if address.is_default or loop.first }} required>
+                  <strong>{{ address.full_name }}</strong> <span class="text-muted small">({{ address.phone }})</span>
+                  <p class="mb-0 small text-muted">{{ address.address_line_1 }}{% if address.address_line_2 %}, {{ address.address_line_2 }}{% endif %}, {{ address.city }}, {{ address.state }} {{ address.postal_code }}, {{ address.country }}</p>
+                </label>
+              </div>
+              {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-muted">You don't have any saved addresses yet. Add one below.</p>
+            {% endif %}
+
+            <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#newAddressPanel">
+              <i class="bi bi-plus-circle"></i> Add a new address
+            </button>
+
+            <div class="collapse mt-3 {{ 'show' if not addresses }}" id="newAddressPanel">
+              <div class="border rounded p-3">
+                <p class="small text-muted">Fill this in and click "Save address" &mdash; you can then select it above.</p>
+                <div class="row g-2">
+                  <div class="col-md-6">
+                    <label class="form-label small">Full name</label>
+                    <input type="text" name="full_name" form="addAddressForm" class="form-control" required>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label small">Phone</label>
+                    <input type="text" name="phone" form="addAddressForm" class="form-control" required>
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label small">Address line 1</label>
+                    <input type="text" name="address_line_1" form="addAddressForm" class="form-control" required>
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label small">Address line 2 (optional)</label>
+                    <input type="text" name="address_line_2" form="addAddressForm" class="form-control">
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label small">City</label>
+                    <input type="text" name="city" form="addAddressForm" class="form-control" required>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label small">State</label>
+                    <input type="text" name="state" form="addAddressForm" class="form-control" required>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label small">Postal code</label>
+                    <input type="text" name="postal_code" form="addAddressForm" class="form-control" required>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label small">Country</label>
+                    <input type="text" name="country" form="addAddressForm" class="form-control" value="India" required>
+                  </div>
+                  <div class="col-md-6 d-flex align-items-end">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" name="is_default" value="y" form="addAddressForm" id="isDefaultAddr">
+                      <label class="form-check-label small" for="isDefaultAddr">Set as default</label>
+                    </div>
+                  </div>
+                  <div class="col-12">
+                    <button type="submit" form="addAddressForm" class="btn btn-secondary btn-sm">Save address</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card mb-4">
+          <div class="card-header fw-semibold"><i class="bi bi-credit-card"></i> Payment method</div>
+          <div class="card-body">
+            <div class="form-check mb-2">
+              <input class="form-check-input" type="radio" name="payment_method" value="cod" id="payCod" checked>
+              <label class="form-check-label" for="payCod"><strong>Cash on Delivery</strong> &mdash; pay when your order arrives</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="payment_method" value="razorpay" id="payRazorpay">
+              <label class="form-check-label" for="payRazorpay"><strong>Pay online</strong> &mdash; UPI, cards, netbanking via Razorpay</label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-4 summary-sticky">
+        <div class="card card-body mb-3">
+          <h2 class="h5 mb-3">Order summary</h2>
+          {% for item in summary.cart.items %}
+          <div class="d-flex justify-content-between small mb-2">
+            <span>{{ item.product.name }} &times; {{ item.quantity }}</span>
+            <span>₹{{ '%.2f'|format(item.subtotal) }}</span>
+          </div>
+          {% endfor %}
+          <hr>
+          <div class="d-flex justify-content-between mb-1">
+            <span class="text-muted">Subtotal</span><span>₹{{ '%.2f'|format(summary.subtotal) }}</span>
+          </div>
+          {% if summary.discount %}
+          <div class="d-flex justify-content-between mb-1 text-success">
+            <span>Discount {% if summary.coupon %}({{ summary.coupon.code }}){% endif %}</span><span>-₹{{ '%.2f'|format(summary.discount) }}</span>
+          </div>
+          {% endif %}
+          <div class="d-flex justify-content-between mb-1">
+            <span class="text-muted">Shipping</span><span>{{ '₹%.2f'|format(summary.shipping_charge) if summary.shipping_charge else 'Free' }}</span>
+          </div>
+          {% if summary.tax %}
+          <div class="d-flex justify-content-between mb-1">
+            <span class="text-muted">Tax</span><span>₹{{ '%.2f'|format(summary.tax) }}</span>
+          </div>
+          {% endif %}
+          <hr>
+          <div class="d-flex justify-content-between fw-bold fs-5">
+            <span>Total</span><span>₹{{ '%.2f'|format(summary.total) }}</span>
+          </div>
+        </div>
+
+        <div class="card card-body mb-3">
+          <form action="{{ url_for('checkout.apply_coupon') }}" method="post" class="d-flex gap-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="text" name="coupon_code" class="form-control form-control-sm" placeholder="Coupon code" value="{{ coupon_code }}">
+            <button type="submit" class="btn btn-outline-primary btn-sm">Apply</button>
+          </form>
+          {% if summary.coupon_error %}<p class="text-danger small mt-2 mb-0">{{ summary.coupon_error }}</p>{% endif %}
+          {% if coupon_code and not summary.coupon_error %}
+          <form action="{{ url_for('checkout.remove_coupon') }}" method="post" class="mt-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-link btn-sm text-danger p-0">Remove coupon</button>
+          </form>
+          {% endif %}
+        </div>
+
+        <button type="submit" class="btn btn-primary w-100 btn-lg" {{ 'disabled' if not addresses }}>
+          Place order <i class="bi bi-check-circle"></i>
+        </button>
+      </div>
+    </div>
+  </form>
+
+  <form id="addAddressForm" action="{{ url_for('checkout.add_checkout_address') }}" method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  </form>
+</div>
+{% endblock %}

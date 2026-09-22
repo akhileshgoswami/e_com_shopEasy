@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% import "partials/forms.html" as f %}
+{% block title %}{{ 'Add address' if is_new else 'Edit address' }} - {{ site_name }}{% endblock %}
+{% block content %}
+<div class="container py-4" style="max-width: 600px;">
+  <h1 class="h4 mb-4">{{ 'Add a new address' if is_new else 'Edit address' }}</h1>
+  <div class="card card-body">
+    <form method="post">
+      {{ form.hidden_tag() }}
+      {{ f.render_field(form.full_name) }}
+      {{ f.render_field(form.phone) }}
+      {{ f.render_field(form.address_line_1) }}
+      {{ f.render_field(form.address_line_2) }}
+      <div class="row">
+        <div class="col-md-4">{{ f.render_field(form.city) }}</div>
+        <div class="col-md-4">{{ f.render_field(form.state) }}</div>
+        <div class="col-md-4">{{ f.render_field(form.postal_code) }}</div>
+      </div>
+      {{ f.render_field(form.country) }}
+      {{ f.render_field(form.is_default) }}
+      <button type="submit" class="btn btn-primary">{{ 'Add address' if is_new else 'Save changes' }}</button>
+      <a href="{{ url_for('auth.addresses') }}" class="btn btn-link">Cancel</a>
+    </form>
+  </div>
+</div>
+{% endblock %}

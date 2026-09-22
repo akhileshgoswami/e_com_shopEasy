@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Privacy Policy - {{ site_name }}{% endblock %}
+{% block content %}
+<div class="container py-5" style="max-width: 780px;">
+  <p class="text-uppercase small fw-semibold text-primary mb-2" style="letter-spacing: 0.08em;">Legal</p>
+  <h1 class="display-6 mb-4">Privacy Policy</h1>
+  <div class="luxury-copy">
+    {{ body|nl2p }}
+  </div>
+</div>
+{% endblock %}

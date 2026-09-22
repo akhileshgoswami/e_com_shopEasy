@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% import "partials/product_card.html" as pc %}
+
+{% block title %}{{ product.name }} - {{ site_name }}{% endblock %}
+{% block meta_description %}{{ product.short_description or product.name }}{% endblock %}
+
+{% block og_tags %}
+{{ super() }}
+<meta property="og:image" content="{{ product.image_url or '' }}">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org/",
+  "@type": "Product",
+  "name": {{ product.name|tojson }},
+  "description": {{ (product.short_description or product.name)|tojson }},
+  "sku": {{ product.sku|tojson }},
+  "image": {{ (product.image_url or '')|tojson }},
+  "offers": {
+    "@type": "Offer",
+    "priceCurrency": "INR",
+    "price": "{{ '%.2f'|format(product.effective_price) }}",
+    "availability": "{{ 'https://schema.org/InStock' if product.in_stock else 'https://schema.org/OutOfStock' }}"
+  }
+}
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <nav aria-label="breadcrumb"><ol class="breadcrumb small">
+    <li class="breadcrumb-item"><a href="{{ url_for('shop.home') }}">Home</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('shop.category_detail', category_slug=product.category.slug) }}">{{ product.category.name }}</a></li>
+    {% if product.subcategory %}
+    <li class="breadcrumb-item"><a href="{{ url_for('shop.subcategory_detail', category_slug=product.category.slug, subcategory_slug=product.subcategory.slug) }}">{{ product.subcategory.name }}</a></li>
+    {% endif %}
+    <li class="breadcrumb-item active">{{ product.name }}</li>
+  </ol></nav>
+
+  <div class="row g-4">
+    <div class="col-md-6">
+      {% set gallery = product.images if product.images else [] %}
+      <img id="mainProductImage" src="{{ product.image_url or url_for('static', filename='images/placeholder.svg') }}" class="main-product-image mb-2" alt="{{ product.name }}">
+      {% if gallery|length > 1 %}
+      <div class="d-flex gap-2 flex-wrap">
+        {% for img in gallery %}
+        <img src="{{ img.image_url }}" class="product-gallery-thumb {{ 'active' if img.image_url == product.image_url }}" onclick="document.getElementById('mainProductImage').src=this.src" alt="{{ product.name }} thumbnail">
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="col-md-6">
+      <h1 class="h3">{{ product.name }}</h1>
+      <p class="text-muted small mb-2">SKU: {{ product.sku }}</p>
+
+      <div class="d-flex align-items-center gap-2 mb-3">
+        <span class="fs-3 fw-bold text-primary">₹{{ '%.2f'|format(product.effective_price) }}</span>
+        {% if product.is_on_sale %}
+        <span class="text-muted text-decoration-line-through">₹{{ '%.2f'|format(product.price) }}</span>
+        <span class="badge bg-danger">-{{ product.discount_percent }}%</span>
+        {% endif %}
+      </div>
+
+      {% if product.in_stock %}
+        {% if product.is_low_stock %}
+        <p class="text-warning small"><i class="bi bi-exclamation-triangle"></i> Only {{ product.stock_quantity }} left in stock &ndash; order soon.</p>
+        {% else %}
+        <p class="text-success small"><i class="bi bi-check-circle"></i> In stock</p>
+        {% endif %}
+      {% else %}
+        <p class="text-danger small"><i class="bi bi-x-circle"></i> Out of stock</p>
+      {% endif %}
+
+      {% if product.short_description %}<p>{{ product.short_description }}</p>{% endif %}
+
+      <form action="{{ url_for('cart.add_to_cart') }}" method="post" class="add-to-cart-form mb-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="product_id" value="{{ product.id }}">
+        <div class="d-flex align-items-center gap-3">
+          <div class="input-group" style="max-width: 140px;">
+            <button class="btn btn-outline-secondary" type="button" onclick="const i=this.nextElementSibling; i.stepDown();">-</button>
+            <input type="number" name="quantity" value="1" min="1" max="{{ product.stock_quantity }}" class="form-control text-center">
+            <button class="btn btn-outline-secondary" type="button" onclick="const i=this.previousElementSibling; i.stepUp();">+</button>
+          </div>
+          <button type="submit" class="btn btn-primary flex-grow-1" {{ 'disabled' if not product.in_stock }}>
+            <i class="bi bi-cart-plus"></i> Add to cart
+          </button>
+        </div>
+        {% if in_cart_quantity %}
+        <p class="small text-muted mt-2">You already have {{ in_cart_quantity }} in your cart.</p>
+        {% endif %}
+      </form>
+
+      {% if product.description %}
+      <div class="border-top pt-3 mt-3">
+        <h2 class="h6">Product description</h2>
+        <p class="text-muted" style="white-space: pre-line;">{{ product.description }}</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if related %}
+  <section class="mt-5">
+    <h2 class="h4 mb-3">Related products</h2>
+    <div class="row g-3">
+      {% for p in related %}{{ pc.product_card(p) }}{% endfor %}
+    </div>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

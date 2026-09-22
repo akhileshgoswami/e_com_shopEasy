@@ -1,0 +1,18 @@
+{% extends "admin/base.html" %}
+{% block title %}Edit {{ item.label }} - Admin{% endblock %}
+{% block admin_content %}
+<h1 class="h3 mb-4">Edit: {{ item.label }}</h1>
+<div class="card card-body" style="max-width: 760px;">
+  <form method="post">
+    {{ form.hidden_tag() }}
+    <div class="mb-3">
+      <label for="{{ form.value.id }}" class="form-label">Content</label>
+      {{ form.value(class="form-control" ~ (" is-invalid" if form.value.errors else ""), rows=16) }}
+      {% for error in form.value.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+    </div>
+    <p class="text-muted small">For long-form pages (About, Privacy Policy, Terms), leave a blank line between paragraphs — each becomes its own paragraph on the page.</p>
+    <button type="submit" class="btn btn-primary">Save changes</button>
+    <a href="{{ url_for('admin.content_list') }}" class="btn btn-link">Cancel</a>
+  </form>
+</div>
+{% endblock %}

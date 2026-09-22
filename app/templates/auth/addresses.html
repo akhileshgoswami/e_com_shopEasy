@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}My addresses - {{ site_name }}{% endblock %}
+{% block content %}
+<div class="container py-4" style="max-width: 800px;">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0">My addresses</h1>
+    <a href="{{ url_for('auth.address_new') }}" class="btn btn-primary btn-sm"><i class="bi bi-plus-circle"></i> Add address</a>
+  </div>
+
+  {% if not addresses %}
+  <p class="text-muted">You haven't added any addresses yet.</p>
+  {% else %}
+  <div class="row g-3">
+    {% for address in addresses %}
+    <div class="col-md-6">
+      <div class="card card-body h-100">
+        {% if address.is_default %}<span class="badge bg-primary mb-2">Default</span>{% endif %}
+        <strong>{{ address.full_name }}</strong>
+        <p class="mb-1 small text-muted">{{ address.phone }}</p>
+        <p class="small text-muted">{{ address.address_line_1 }}{% if address.address_line_2 %}, {{ address.address_line_2 }}{% endif %}<br>{{ address.city }}, {{ address.state }} {{ address.postal_code }}<br>{{ address.country }}</p>
+        <div class="d-flex gap-2">
+          <a href="{{ url_for('auth.address_edit', address_id=address.id) }}" class="btn btn-sm btn-outline-secondary">Edit</a>
+          {% if not address.is_default %}
+          <form action="{{ url_for('auth.address_set_default', address_id=address.id) }}" method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-outline-secondary">Set default</button>
+          </form>
+          {% endif %}
+          <form action="{{ url_for('auth.address_delete', address_id=address.id) }}" method="post" data-confirm="Delete this address?">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

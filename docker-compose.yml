@@ -1,0 +1,50 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-ecom_db}
+      POSTGRES_USER: ${DB_USER:-ecom_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-ecom_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-ecom_user} -d ${DB_NAME:-ecom_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build:
+      context: .
+      target: runtime
+    restart: unless-stopped
+    environment:
+      FLASK_APP: wsgi.py
+      FLASK_ENV: development
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-key-not-for-production}
+      DATABASE_URL: postgresql+psycopg2://${DB_USER:-ecom_user}:${DB_PASSWORD:-ecom_password}@db:5432/${DB_NAME:-ecom_db}
+      BASE_URL: http://localhost:8000
+      PORT: 8080
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      GCS_ENABLED: "false"
+      MAIL_ENABLED: "false"
+    ports:
+      - "8000:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - uploads_data:/app/app/static/uploads
+    command: >
+      sh -c "flask db upgrade && gunicorn -w 2 -k gthread --threads 4 -b 0.0.0.0:8080 'app:create_app()'"
+
+volumes:
+  postgres_data:
+  uploads_data:

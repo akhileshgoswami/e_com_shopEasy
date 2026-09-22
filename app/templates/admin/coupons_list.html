@@ -1,0 +1,33 @@
+{% extends "admin/base.html" %}
+{% import "partials/pagination.html" as pg %}
+{% block title %}Coupons - Admin{% endblock %}
+{% block admin_content %}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+  <h1 class="h3 mb-0">Coupons</h1>
+  <a href="{{ url_for('admin.coupon_new') }}" class="btn btn-primary btn-sm"><i class="bi bi-plus-circle"></i> New coupon</a>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table align-middle mb-0">
+      <thead><tr><th>Code</th><th>Type</th><th>Value</th><th>Min order</th><th>Usage</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+      {% for coupon in coupons %}
+        <tr>
+          <td class="fw-semibold">{{ coupon.code }}</td>
+          <td>{{ coupon.discount_type }}</td>
+          <td>{{ coupon.discount_value }}{{ '%' if coupon.discount_type == 'percent' else '' }}</td>
+          <td>₹{{ '%.2f'|format(coupon.minimum_order_value) }}</td>
+          <td>{{ coupon.used_count }}{% if coupon.usage_limit %} / {{ coupon.usage_limit }}{% endif %}</td>
+          <td><span class="badge bg-{{ 'success' if coupon.is_active else 'secondary' }}">{{ 'Active' if coupon.is_active else 'Inactive' }}</span></td>
+          <td><a href="{{ url_for('admin.coupon_edit', coupon_id=coupon.id) }}" class="btn btn-sm btn-outline-secondary">Edit</a></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="text-center text-muted py-4">No coupons yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{{ pg.render_pagination(pagination, 'admin.coupons') }}
+{% endblock %}

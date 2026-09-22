@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% import "partials/forms.html" as f %}
+{% block title %}My profile - {{ site_name }}{% endblock %}
+{% block content %}
+<div class="container py-4" style="max-width: 720px;">
+  <h1 class="h3 mb-4">My profile</h1>
+
+  <div class="card card-body mb-4">
+    <h2 class="h5 mb-3">Account details</h2>
+    <form method="post">
+      {{ form.hidden_tag() }}
+      {{ f.render_field(form.name) }}
+      <div class="mb-3">
+        <label class="form-label">Email</label>
+        <input type="text" class="form-control" value="{{ current_user.email }}" disabled>
+      </div>
+      {{ f.render_field(form.phone) }}
+      <button type="submit" class="btn btn-primary">Save changes</button>
+    </form>
+  </div>
+
+  <div class="card card-body mb-4">
+    <h2 class="h5 mb-3">Change password</h2>
+    <form method="post" action="{{ url_for('auth.change_password') }}">
+      {{ password_form.hidden_tag() }}
+      {{ f.render_field(password_form.current_password) }}
+      {{ f.render_field(password_form.new_password) }}
+      {{ f.render_field(password_form.confirm_password) }}
+      <button type="submit" class="btn btn-secondary">Change password</button>
+    </form>
+  </div>
+
+  <div class="card card-body">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h2 class="h5 mb-0">Recent orders</h2>
+      <a href="{{ url_for('checkout.my_orders') }}" class="small">View all</a>
+    </div>
+    {% if recent_orders %}
+    <ul class="list-group list-group-flush">
+      {% for order in recent_orders %}
+      <li class="list-group-item d-flex justify-content-between">
+        <a href="{{ url_for('checkout.order_detail', order_id=order.id) }}">{{ order.order_number }}</a>
+        <span class="badge bg-secondary status-badge">{{ order.order_status.replace('_',' ') }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-muted small mb-0">No orders yet.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

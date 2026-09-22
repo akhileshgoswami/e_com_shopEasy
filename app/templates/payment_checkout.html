@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Complete payment - {{ site_name }}{% endblock %}
+{% block extra_head %}
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+{% endblock %}
+{% block content %}
+<div class="container py-5 text-center" style="max-width: 560px;">
+  <i class="bi bi-shield-lock display-1 text-primary"></i>
+  <h1 class="h4 mt-3">Complete your payment</h1>
+  <p class="text-muted">Order <strong>{{ order.order_number }}</strong> &middot; ₹{{ '%.2f'|format(order.total_amount) }}</p>
+
+  <div id="paymentStatus" class="alert alert-info">Preparing secure payment...</div>
+
+  <button id="retryPaymentBtn" class="btn btn-primary d-none">Retry payment</button>
+  <a href="{{ url_for('checkout.order_detail', order_id=order.id) }}" class="btn btn-link d-block mt-2">Back to order details</a>
+</div>
+
+<script>
+(function () {
+  const orderId = {{ order.id }};
+  const statusEl = document.getElementById("paymentStatus");
+  const retryBtn = document.getElementById("retryPaymentBtn");
+
+  function setStatus(message, type) {
+    statusEl.className = "alert alert-" + type;
+    statusEl.textContent = message;
+  }
+
+  function startPayment() {
+    retryBtn.classList.add("d-none");
+    setStatus("Preparing secure payment...", "info");
+
+    fetch("{{ url_for('payments.create_razorpay_order') }}", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": window.CSRF_TOKEN },
+      body: JSON.stringify({ order_id: orderId }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.success) {
+          setStatus(data.message || "Unable to start payment.", "danger");
+          retryBtn.classList.remove("d-none");
+          return;
+        }
+
+        const options = {
+          key: data.key_id,
+          amount: data.amount,
+          currency: data.currency,
+          name: "{{ site_name }}",
+          description: "Order " + data.order_number,
+          order_id: data.razorpay_order_id,
+          prefill: { name: data.name, email: data.email, contact: data.contact },
+          theme: { color: "#2f5233" },
+          handler: function (response) {
+            setStatus("Verifying payment...", "info");
+            fetch("{{ url_for('payments.verify_razorpay_payment') }}", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "X-CSRFToken": window.CSRF_TOKEN },
+              body: JSON.stringify({
+                order_id: orderId,
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              }),
+            })
+              .then((res) => res.json())
+              .then((verifyData) => {
+                if (verifyData.success) {
+                  setStatus("Payment verified! Redirecting...", "success");
+                  window.location.href = verifyData.redirect;
+                } else {
+                  setStatus(verifyData.message || "Payment verification failed.", "danger");
+                  retryBtn.classList.remove("d-none");
+                }
+              })
+              .catch(() => {
+                setStatus("Could not verify payment. If money was deducted, contact support with your order number.", "danger");
+              });
+          },
+          modal: {
+            ondismiss: function () {
+              setStatus("Payment cancelled.", "warning");
+              retryBtn.classList.remove("d-none");
+              fetch("{{ url_for('payments.razorpay_payment_failed') }}", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-CSRFToken": window.CSRF_TOKEN },
+                body: JSON.stringify({ order_id: orderId, reason: "Cancelled by customer." }),
+              });
+            },
+          },
+        };
+
+        const rzp = new Razorpay(options);
+        rzp.on("payment.failed", function (response) {
+          const err = response.error || {};
+          setStatus("Payment failed: " + (err.description || "please try again."), "danger");
+          retryBtn.classList.remove("d-none");
+          const reasonParts = [err.code, err.description].filter(Boolean);
+          if (err.metadata && err.metadata.payment_id) {
+            reasonParts.push("payment_id=" + err.metadata.payment_id);
+          }
+          fetch("{{ url_for('payments.razorpay_payment_failed') }}", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-CSRFToken": window.CSRF_TOKEN },
+            body: JSON.stringify({ order_id: orderId, reason: reasonParts.join(": ") || "Payment failed." }),
+          });
+        });
+        rzp.open();
+        setStatus("Waiting for payment...", "info");
+      })
+      .catch(() => {
+        setStatus("Network error while starting payment.", "danger");
+        retryBtn.classList.remove("d-none");
+      });
+  }
+
+  retryBtn.addEventListener("click", startPayment);
+  startPayment();
+})();
+</script>
+{% endblock %}

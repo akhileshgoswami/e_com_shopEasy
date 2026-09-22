@@ -1,0 +1,36 @@
+# Copy this file to terraform.tfvars and fill in real values.
+# terraform.tfvars is gitignored — never commit real secrets.
+
+project_id = "your-gcp-project-id"
+region     = "asia-south1"
+environment = "production"
+
+database_instance_name = "ecom-db-instance"
+database_name           = "ecom_db"
+database_user           = "ecom_user"
+
+# Must be globally unique across all of GCS.
+bucket_name = "your-gcp-project-id-ecom-images"
+
+artifact_repo_name     = "ecom-repo"
+cloud_run_service_name = "ecom-web"
+
+# Leave as-is for the first `terraform apply` (a placeholder image just to
+# create the Cloud Run service). scripts/deploy.sh updates it afterwards.
+cloud_run_image = "gcr.io/cloudrun/hello"
+
+# Set after your first deploy, once you know the Cloud Run URL or custom domain.
+base_url = ""
+
+# Prefer setting these via `gcloud secrets versions add` after apply instead
+# of committing them here. If you do set them here, this file MUST stay out
+# of version control.
+razorpay_key_id         = ""
+razorpay_key_secret     = ""
+razorpay_webhook_secret = ""
+
+# "Sign in with Google" — leave both blank to keep the button disabled.
+google_oauth_client_id     = ""
+google_oauth_client_secret = ""
+
+deletion_protection = true

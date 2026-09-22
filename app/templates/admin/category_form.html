@@ -1,0 +1,21 @@
+{% extends "admin/base.html" %}
+{% import "partials/forms.html" as f %}
+{% block title %}{{ 'New category' if is_new else 'Edit category' }} - Admin{% endblock %}
+{% block admin_content %}
+<h1 class="h3 mb-4">{{ 'New category' if is_new else 'Edit category' }}</h1>
+<div class="card card-body" style="max-width: 640px;">
+  <form method="post" enctype="multipart/form-data">
+    {{ form.hidden_tag() }}
+    {{ f.render_field(form.name) }}
+    {{ f.render_field(form.description) }}
+    {% if category and category.image_url %}
+    <img src="{{ category.image_url }}" alt="{{ category.name }}" style="width:80px;height:80px;object-fit:cover;border-radius:0.5rem;" class="mb-2">
+    {% endif %}
+    {{ f.render_field(form.image) }}
+    {{ f.render_field(form.sort_order) }}
+    {{ f.render_field(form.is_active) }}
+    <button type="submit" class="btn btn-primary">Save</button>
+    <a href="{{ url_for('admin.categories') }}" class="btn btn-link">Cancel</a>
+  </form>
+</div>
+{% endblock %}

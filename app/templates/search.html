@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% import "partials/product_card.html" as pc %}
+{% import "partials/pagination.html" as pg %}
+
+{% block title %}Search{% if q %} - {{ q }}{% endif %} - {{ site_name }}{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <h1 class="h3 mb-4">{% if q %}Search results for "{{ q }}"{% else %}Search{% endif %}</h1>
+
+  {% if not q %}
+  <p class="text-muted">Enter a search term using the search bar above.</p>
+  {% elif products %}
+  <p class="text-muted small">{{ pagination.total }} result(s)</p>
+  <div class="row g-3">
+    {% for product in products %}{{ pc.product_card(product) }}{% endfor %}
+  </div>
+  {{ pg.render_pagination(pagination, 'shop.search', q=q, sort=sort) }}
+  {% else %}
+  <p class="text-muted py-5 text-center">No products found for "{{ q }}".</p>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,109 @@
+name: Test and Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: asia-south1
+  REPO_NAME: ecom-repo
+  SERVICE_NAME: ecom-web
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: ecom_test
+          POSTGRES_USER: ecom_user
+          POSTGRES_PASSWORD: ecom_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests
+        env:
+          TEST_DATABASE_URL: sqlite:///:memory:
+        run: |
+          pytest -q --cov=app --cov-report=term-missing
+
+  build-and-deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Configure a Workload Identity Federation provider + service account
+      # in GCP and store its details as repo secrets. See README "GitHub
+      # Actions deployment" section for the exact gcloud commands.
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Build and push image
+        run: |
+          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/ecom-web:${{ github.sha }}"
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Run database migrations
+        run: |
+          gcloud run jobs deploy ecom-migrate \
+            --image="${{ env.IMAGE }}" \
+            --region="${{ env.REGION }}" \
+            --project="${{ env.PROJECT_ID }}" \
+            --set-cloudsql-instances="${{ secrets.GCP_CLOUDSQL_CONNECTION_NAME }}" \
+            --set-env-vars="FLASK_APP=wsgi.py,FLASK_ENV=production,INSTANCE_CONNECTION_NAME=${{ secrets.GCP_CLOUDSQL_CONNECTION_NAME }},DB_NAME=ecom_db,DB_USER=ecom_user,GOOGLE_CLOUD_PROJECT=${{ env.PROJECT_ID }}" \
+            --set-secrets="SECRET_KEY=ecom-flask-secret-key:latest,DB_PASSWORD=ecom-db-password:latest,RAZORPAY_KEY_ID=ecom-razorpay-key-id:latest,RAZORPAY_KEY_SECRET=ecom-razorpay-key-secret:latest,RAZORPAY_WEBHOOK_SECRET=ecom-razorpay-webhook-secret:latest" \
+            --command="flask" \
+            --args="db,upgrade" \
+            --max-retries=0
+          gcloud run jobs execute ecom-migrate --region="${{ env.REGION }}" --project="${{ env.PROJECT_ID }}" --wait
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "${{ env.SERVICE_NAME }}" \
+            --image="${{ env.IMAGE }}" \
+            --region="${{ env.REGION }}" \
+            --project="${{ env.PROJECT_ID }}" \
+            --platform=managed \
+            --quiet
+
+      - name: Health check
+        run: |
+          URL=$(gcloud run services describe "${{ env.SERVICE_NAME }}" --region="${{ env.REGION }}" --project="${{ env.PROJECT_ID }}" --format='value(status.url)')
+          curl -fsS "$URL/health"

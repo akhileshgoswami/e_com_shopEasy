@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}About us - {{ site_name }}{% endblock %}
+{% block content %}
+<div class="container py-5" style="max-width: 760px;">
+  <p class="text-uppercase small fw-semibold text-primary mb-2" style="letter-spacing: 0.08em;">Our story</p>
+  <h1 class="display-6 mb-4">About {{ site_name }}</h1>
+  <div class="luxury-copy">
+    {{ body|nl2p }}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,24 @@
+{% extends "admin/base.html" %}
+{% import "partials/forms.html" as f %}
+{% block title %}{{ 'New coupon' if is_new else 'Edit coupon' }} - Admin{% endblock %}
+{% block admin_content %}
+<h1 class="h3 mb-4">{{ 'New coupon' if is_new else 'Edit coupon' }}</h1>
+<div class="card card-body" style="max-width: 560px;">
+  <form method="post">
+    {{ form.hidden_tag() }}
+    {{ f.render_field(form.code) }}
+    <div class="row">
+      <div class="col-md-6">{{ f.render_field(form.discount_type) }}</div>
+      <div class="col-md-6">{{ f.render_field(form.discount_value) }}</div>
+    </div>
+    <div class="row">
+      <div class="col-md-6">{{ f.render_field(form.minimum_order_value) }}</div>
+      <div class="col-md-6">{{ f.render_field(form.maximum_discount) }}</div>
+    </div>
+    {{ f.render_field(form.usage_limit) }}
+    {{ f.render_field(form.is_active) }}
+    <button type="submit" class="btn btn-primary">Save</button>
+    <a href="{{ url_for('admin.coupons') }}" class="btn btn-link">Cancel</a>
+  </form>
+</div>
+{% endblock %}

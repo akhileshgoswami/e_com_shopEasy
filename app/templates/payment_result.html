@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Payment status - {{ site_name }}{% endblock %}
+{% block content %}
+<div class="container py-5 text-center" style="max-width: 560px;">
+  {% if order.payment_status == 'paid' %}
+  <i class="bi bi-check-circle-fill text-success display-1"></i>
+  <h1 class="h4 mt-3">Payment already completed</h1>
+  {% else %}
+  <i class="bi bi-info-circle text-secondary display-1"></i>
+  <h1 class="h4 mt-3">This order is no longer awaiting payment</h1>
+  {% endif %}
+  <p class="text-muted">Order <strong>{{ order.order_number }}</strong> &middot; status: {{ order.order_status.replace('_',' ') }}</p>
+  <a href="{{ url_for('checkout.order_detail', order_id=order.id) }}" class="btn btn-primary">View order details</a>
+</div>
+{% endblock %}

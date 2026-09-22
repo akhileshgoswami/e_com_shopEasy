@@ -1,0 +1,471 @@
+<title>Store Operator's Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1b1b1b;
+    --ink-soft: #46433d;
+    --muted: #7a756b;
+    --gold: #b8873f;
+    --gold-dark: #8f6427;
+    --gold-soft: #f4ead9;
+    --emerald: #14261f;
+    --bg: #faf8f5;
+    --surface: #ffffff;
+    --border: #e9e3da;
+    --code-bg: #f1ede4;
+    --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+    --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink: #f2efe9;
+      --ink-soft: #d9d3c6;
+      --muted: #a39d8f;
+      --gold: #d1a35a;
+      --gold-dark: #e8c17f;
+      --gold-soft: #2a2213;
+      --emerald: #0d1713;
+      --bg: #15130f;
+      --surface: #1d1a15;
+      --border: #322d24;
+      --code-bg: #262119;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ink: #f2efe9;
+    --ink-soft: #d9d3c6;
+    --muted: #a39d8f;
+    --gold: #d1a35a;
+    --gold-dark: #e8c17f;
+    --gold-soft: #2a2213;
+    --emerald: #0d1713;
+    --bg: #15130f;
+    --surface: #1d1a15;
+    --border: #322d24;
+    --code-bg: #262119;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--ink-soft);
+    font-family: var(--font-body);
+    line-height: 1.65;
+    font-size: 16px;
+  }
+  h1, h2, h3 { font-family: var(--font-display); color: var(--ink); font-weight: 700; text-wrap: balance; }
+  h1 { font-size: 2rem; margin: 0; }
+  h2 { font-size: 1.5rem; margin: 0 0 0.9rem; }
+  h3 { font-size: 1.1rem; margin: 1.6rem 0 0.5rem; font-weight: 600; }
+  p { margin: 0 0 1rem; max-width: 62ch; }
+  a { color: var(--gold-dark); }
+  code {
+    background: var(--code-bg);
+    padding: 0.15em 0.4em;
+    border-radius: 0.3em;
+    font-size: 0.88em;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--gold-dark);
+    margin: 0 0 0.4rem;
+  }
+
+  .shell { display: flex; min-height: 100%; }
+
+  /* ---- Sidebar nav ---- */
+  .toc {
+    width: 250px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 1.75rem 1.25rem;
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    align-self: flex-start;
+    height: 100vh;
+    overflow-y: auto;
+  }
+  .toc-brand { display: flex; align-items: center; gap: 0.5rem; font-family: var(--font-display); font-weight: 700; font-size: 1.15rem; color: var(--ink); margin-bottom: 0.15rem; }
+  .toc-brand svg { flex-shrink: 0; }
+  .toc-sub { color: var(--muted); font-size: 0.78rem; margin-bottom: 1.5rem; }
+  .toc nav { display: flex; flex-direction: column; gap: 0.1rem; }
+  .toc-group-label { text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.68rem; font-weight: 600; color: var(--muted); margin: 1rem 0 0.35rem; }
+  .toc-group-label:first-child { margin-top: 0; }
+  .toc a {
+    color: var(--ink-soft);
+    text-decoration: none;
+    font-size: 0.86rem;
+    padding: 0.32rem 0.5rem;
+    border-radius: 0.35rem;
+    display: block;
+  }
+  .toc a:hover { background: var(--gold-soft); color: var(--gold-dark); }
+
+  /* ---- Main content ---- */
+  main { flex: 1; min-width: 0; padding: 3rem clamp(1rem, 4vw, 4rem) 6rem; max-width: 900px; }
+
+  .hero { margin-bottom: 3rem; }
+  .hero p.lead { font-size: 1.05rem; color: var(--muted); max-width: 60ch; }
+
+  .panel {
+    background: var(--emerald);
+    color: #f6f1e7;
+    border: 1px solid rgba(184, 135, 63, 0.28);
+    border-radius: 0.75rem;
+    padding: 1.5rem 1.75rem;
+    margin: 1.5rem 0;
+  }
+  .panel h3 { color: #fff; margin-top: 0; }
+  .panel p { color: #d9d2c2; }
+  .panel a { color: var(--gold); }
+  .panel code { background: rgba(184, 135, 63, 0.18); color: #f6ead2; }
+
+  section { padding-top: 2.25rem; border-top: 1px solid var(--border); margin-top: 2.25rem; }
+  section:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
+
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 0.9rem;
+    margin: 1.25rem 0 1.75rem;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0.6rem;
+    padding: 1rem 1.1rem;
+  }
+  .card .card-icon { font-size: 1.1rem; margin-bottom: 0.4rem; display: block; }
+  .card strong { display: block; color: var(--ink); font-size: 0.95rem; margin-bottom: 0.3rem; }
+  .card span { font-size: 0.84rem; color: var(--muted); }
+
+  ol.steps { list-style: none; counter-reset: step; padding: 0; margin: 1.25rem 0; }
+  ol.steps li {
+    counter-increment: step;
+    position: relative;
+    padding-left: 2.6rem;
+    padding-bottom: 1.1rem;
+    margin-left: 0.9rem;
+    border-left: 1px solid var(--border);
+  }
+  ol.steps li:last-child { border-left-color: transparent; padding-bottom: 0; }
+  ol.steps li::before {
+    content: counter(step);
+    position: absolute;
+    left: -0.95rem;
+    top: -0.1rem;
+    width: 1.8rem;
+    height: 1.8rem;
+    border-radius: 50%;
+    background: var(--ink);
+    color: #fff;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  ol.steps strong { color: var(--ink); }
+
+  .callout {
+    border-left: 3px solid var(--gold);
+    background: var(--gold-soft);
+    padding: 0.85rem 1.1rem;
+    border-radius: 0 0.4rem 0.4rem 0;
+    margin: 1.25rem 0;
+    font-size: 0.92rem;
+  }
+  .callout strong { color: var(--ink); }
+
+  table { width: 100%; border-collapse: collapse; margin: 1.25rem 0; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 0.55rem 0.7rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.05em; }
+  .table-wrap { overflow-x: auto; }
+
+  details {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    padding: 0.85rem 1.1rem;
+    margin-bottom: 0.6rem;
+  }
+  details summary { cursor: pointer; font-weight: 600; color: var(--ink); }
+  details p:last-child { margin-bottom: 0; }
+  details[open] summary { margin-bottom: 0.5rem; }
+
+  .badge { display: inline-block; background: var(--gold); color: #241a0a; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 0.15em 0.5em; border-radius: 0.3em; }
+
+  /* ---- Mobile ---- */
+  .toc-toggle { display: none; }
+  @media (max-width: 860px) {
+    .shell { flex-direction: column; }
+    .toc {
+      position: sticky;
+      top: env(safe-area-inset-top, 0px);
+      width: 100%;
+      height: auto;
+      max-height: none;
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+      z-index: 5;
+      padding: 1rem 1.25rem;
+    }
+    .toc nav { display: none; }
+    .toc.open nav { display: flex; max-height: 70vh; overflow-y: auto; }
+    .toc-toggle {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: var(--ink);
+      color: #fff;
+      border: none;
+      font-family: var(--font-body);
+      font-weight: 600;
+      font-size: 0.82rem;
+      padding: 0.5rem 0.85rem;
+      border-radius: 999px;
+      margin-top: 0.75rem;
+    }
+    main { padding: 2rem 1.25rem 4rem; }
+  }
+</style>
+
+<div class="shell">
+  <aside class="toc" id="toc">
+    <div class="toc-brand">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 3L2 8l10 13L22 8l-4-5H6z" stroke="var(--gold)" stroke-width="1.6" stroke-linejoin="round"/><path d="M2 8h20M9 3l3 5-3 13M15 3l-3 5 3 13" stroke="var(--gold)" stroke-width="1.3" stroke-linejoin="round"/></svg>
+      ShopEasy
+    </div>
+    <p class="toc-sub">Store operator's guide</p>
+    <button class="toc-toggle" id="tocToggle" type="button">☰ Contents</button>
+    <nav id="tocNav">
+      <a href="#start">Getting started</a>
+      <div class="toc-group-label">Shop front</div>
+      <a href="#customer-tour">What customers see</a>
+      <div class="toc-group-label">Admin panel</div>
+      <a href="#admin-access">Logging in</a>
+      <a href="#admin-map">Where things are</a>
+      <div class="toc-group-label">Walkthroughs</div>
+      <a href="#task-catalog">Add a category → product</a>
+      <a href="#task-stock">Update stock</a>
+      <a href="#task-order">Process an order</a>
+      <a href="#task-content">Edit About / Privacy / Contact</a>
+      <a href="#task-coupon">Create a coupon</a>
+      <div class="toc-group-label">Reference</div>
+      <a href="#roles">Who can do what</a>
+      <a href="#faq">Troubleshooting</a>
+    </nav>
+  </aside>
+
+  <main>
+    <div class="hero">
+      <p class="eyebrow">Handover document</p>
+      <h1>Running the ShopEasy store</h1>
+      <p class="lead" style="margin-top:0.75rem;">Everything needed to manage the shop day to day — where each admin screen lives, what it's for, and the exact steps for the tasks you'll do most often. No technical background required.</p>
+    </div>
+
+    <section id="start">
+      <h2>Getting started</h2>
+      <p>The store has two sides, both in the same web address — just different pages:</p>
+      <div class="card-grid">
+        <div class="card">
+          <span class="card-icon">🛍️</span>
+          <strong>The shop front</strong>
+          <span>What customers browse and buy from. Open the site's main address — e.g. <code>https://your-store-address/</code>.</span>
+        </div>
+        <div class="card">
+          <span class="card-icon">🔑</span>
+          <strong>The admin panel</strong>
+          <span>Where you manage everything. Add <code>/admin/login</code> to the same address — e.g. <code>https://your-store-address/admin/login</code>.</span>
+        </div>
+      </div>
+      <div class="callout"><strong>Your exact web address</strong> depends on how the site was deployed (a local test link, or a live domain once launched). Whoever set up the site can give you the current one — the <code>/admin/login</code> part at the end is always the same.</div>
+    </section>
+
+    <section id="customer-tour">
+      <h2>What customers see</h2>
+      <p>Worth knowing the customer side, since it's what your admin changes affect. A visitor can browse freely without an account:</p>
+      <div class="table-wrap">
+      <table>
+        <tr><th>Page</th><th>What it does</th></tr>
+        <tr><td>Home</td><td>Featured categories, featured products, items on sale, new arrivals.</td></tr>
+        <tr><td>Category / subcategory pages</td><td>Products filtered by what you've organised them under in the admin panel.</td></tr>
+        <tr><td>Search &amp; All products</td><td>Full catalog with filters (category, price, in-stock, on sale) and sorting.</td></tr>
+        <tr><td>Product page</td><td>Photos, price, stock status, description, "Add to cart".</td></tr>
+      </table>
+      </div>
+      <p>Adding an item to the cart, or checking out, requires the customer to log in or create an account first — that's by design, so every order is tied to a real customer record.</p>
+      <p>At checkout, a customer picks <strong>Cash on Delivery</strong> or <strong>online payment</strong> (card / UPI / netbanking via Razorpay), enters a delivery address, and places the order. Both payment types, and every order afterward, are fully visible to you in the admin panel.</p>
+    </section>
+
+    <section id="admin-access">
+      <h2>Logging in to the admin panel</h2>
+      <ol class="steps">
+        <li>Go to <code>/admin/login</code> on the store's address.</li>
+        <li>Enter the admin email and password you were given.</li>
+        <li>You'll land on the <strong>Dashboard</strong> — the admin home screen.</li>
+      </ol>
+      <div class="panel">
+        <h3>Don't have admin credentials yet?</h3>
+        <p>Only someone with command-line access to the server can create the first admin account (it's a one-time setup step, not something done from a web page). Ask whoever deployed the site to create your login, or to reset your password if you're locked out.</p>
+      </div>
+      <div class="callout"><strong>Security note:</strong> 5 wrong password attempts locks that login for 15 minutes. This applies to admin accounts too — it's a protection against guessing attacks, not a bug.</div>
+    </section>
+
+    <section id="admin-map">
+      <h2>Where things are</h2>
+      <p>The left-hand sidebar in the admin panel has every section you'll use. Here's what each one is for:</p>
+
+      <div class="table-wrap">
+      <table>
+        <tr><th>Sidebar item</th><th>What you'll do there</th></tr>
+        <tr><td><strong>Dashboard</strong></td><td>At-a-glance numbers: total orders, pending orders, revenue, low-stock and out-of-stock counts, recent orders, newest customers.</td></tr>
+        <tr><td><strong>Categories</strong></td><td>Top-level sections of your catalog (e.g. "Electronics", "Fashion"). Create, rename, reorder, upload a category image, or deactivate one.</td></tr>
+        <tr><td><strong>Subcategories</strong></td><td>Sit inside a category (e.g. "Mobiles" inside "Electronics"). Same controls as categories, plus which category each belongs to.</td></tr>
+        <tr><td><strong>Products</strong></td><td>Your full item catalog: name, price, sale price, description, SKU, stock, and photos. This is where most of your daily work happens.</td></tr>
+        <tr><td><strong>Inventory</strong></td><td>A stock-focused view across all products — filter to just what's low or out of stock, and update quantities quickly without opening each product.</td></tr>
+        <tr><td><strong>Orders</strong></td><td>Every order placed, with filters by status and payment method. Open one to see items, customer, address, payment details, and to move it through its delivery stages.</td></tr>
+        <tr><td><strong>Payments</strong></td><td>A payment-focused log — useful for reconciling what's been paid, what failed, and why (shows the actual gateway error for failed online payments).</td></tr>
+        <tr><td><strong>Users</strong></td><td>Every registered customer (and admin). Search, and promote a customer to admin or deactivate an account.</td></tr>
+        <tr><td><strong>Coupons</strong></td><td>Discount codes — percentage or flat amount off, with optional minimum order value, usage limits, and expiry.</td></tr>
+        <tr><td><strong>Content</strong></td><td>Edit the text on your <em>About</em>, <em>Privacy Policy</em>, and <em>Terms</em> pages, plus your public contact email/phone/address — without needing a developer.</td></tr>
+        <tr><td><strong>Settings</strong></td><td>A read-only summary of technical configuration (payment gateway status, storage backend, shipping/tax defaults) — useful when troubleshooting with a developer.</td></tr>
+      </table>
+      </div>
+    </section>
+
+    <section id="task-catalog">
+      <h2>Walkthrough: add a category, subcategory, and product</h2>
+      <p>Products always live inside a category (and usually a subcategory), so set those up first.</p>
+      <h3>1. Create the category</h3>
+      <ol class="steps">
+        <li>Sidebar → <strong>Categories</strong> → <strong>New category</strong>.</li>
+        <li>Enter a name (e.g. <em>"Electronics"</em>) and, optionally, a description and image.</li>
+        <li>Leave <strong>Active</strong> checked so it's visible on the shop front, then <strong>Save</strong>.</li>
+      </ol>
+      <h3>2. Create a subcategory inside it</h3>
+      <ol class="steps">
+        <li>Sidebar → <strong>Subcategories</strong> → <strong>New subcategory</strong>.</li>
+        <li>Pick the parent category from the dropdown, name it (e.g. <em>"Mobiles"</em>), then <strong>Save</strong>.</li>
+      </ol>
+      <h3>3. Add the product</h3>
+      <ol class="steps">
+        <li>Sidebar → <strong>Products</strong> → <strong>New product</strong>.</li>
+        <li>Choose the category and subcategory, then fill in name, SKU (a unique code — anything you like, as long as it's not reused), price, and stock quantity.</li>
+        <li><strong>Sale price</strong> is optional — set it lower than the regular price to show a "% off" badge; leave it blank otherwise.</li>
+        <li><strong>Save</strong> the product first.</li>
+        <li>You'll now see an <strong>Upload image</strong> panel — add one or more photos. The first photo becomes the main image shown on product cards; you can change which one is "main" or delete any of them afterward.</li>
+      </ol>
+      <div class="callout">Product photos appear <strong>uncropped</strong> — the full image always shows, so upload roughly square photos for the cleanest look on cards.</div>
+    </section>
+
+    <section id="task-stock">
+      <h2>Walkthrough: update stock</h2>
+      <ol class="steps">
+        <li>Sidebar → <strong>Inventory</strong> (fastest for bulk checks) or open the product directly under <strong>Products</strong>.</li>
+        <li>Use the filter buttons — <strong>Low stock</strong> / <strong>Out of stock</strong> — to see what needs restocking.</li>
+        <li>Edit the quantity in the row and click <strong>Save</strong>. No page reload needed.</li>
+      </ol>
+      <p><strong>Low stock threshold</strong> is the number at which a product starts showing an amber "low stock" warning — set per product when you create or edit it.</p>
+    </section>
+
+    <section id="task-order">
+      <h2>Walkthrough: process an order</h2>
+      <ol class="steps">
+        <li>Sidebar → <strong>Orders</strong>. Filter by status or payment method, or search by order number / customer name.</li>
+        <li>Open an order to see the full breakdown: items, customer, shipping address, payment method and status, and a history of every status change.</li>
+        <li>Move it forward using <strong>Update status</strong> — the dropdown only shows the statuses that make sense next (e.g. a placed order can go to <em>Confirmed</em> or <em>Processing</em>, not straight to <em>Delivered</em>).</li>
+        <li><span class="badge">COD only</span> Once a Cash-on-Delivery order is delivered and you've collected the cash, click <strong>Mark payment as collected</strong> in the Payment section — this is separate from the delivery status, since the two don't always happen at the same moment.</li>
+      </ol>
+      <div class="callout"><strong>Cancelling an order</strong> automatically returns the reserved stock to inventory — you don't need to adjust quantities manually afterward.</div>
+    </section>
+
+    <section id="task-content">
+      <h2>Walkthrough: edit About / Privacy / Contact text</h2>
+      <ol class="steps">
+        <li>Sidebar → <strong>Content</strong>.</li>
+        <li>Pick the page or field to change — e.g. <em>"About us"</em>, <em>"Support email"</em>, <em>"Business address"</em> — and click <strong>Edit</strong>.</li>
+        <li>For the long pages (About, Privacy Policy, Terms), type your text and leave a <strong>blank line between paragraphs</strong> — each one becomes its own paragraph on the live page.</li>
+        <li><strong>Save changes</strong>. The public page updates immediately — no developer, no redeploy.</li>
+      </ol>
+    </section>
+
+    <section id="task-coupon">
+      <h2>Walkthrough: create a coupon</h2>
+      <ol class="steps">
+        <li>Sidebar → <strong>Coupons</strong> → <strong>New coupon</strong>.</li>
+        <li>Set a <strong>code</strong> customers will type (e.g. <code>WELCOME10</code>), a <strong>discount type</strong> (percentage or flat amount), and the value.</li>
+        <li>Optionally set a <strong>minimum order value</strong>, a <strong>maximum discount</strong> cap (useful with percentage coupons), and a <strong>usage limit</strong>.</li>
+        <li><strong>Save</strong> — it's live immediately. Customers enter it at checkout.</li>
+      </ol>
+    </section>
+
+    <section id="roles">
+      <h2>Who can do what</h2>
+      <div class="table-wrap">
+      <table>
+        <tr><th>Role</th><th>Can do</th></tr>
+        <tr><td><strong>Visitor</strong> (not logged in)</td><td>Browse, search, view products — cannot add to cart or check out.</td></tr>
+        <tr><td><strong>Customer</strong></td><td>Cart, checkout, view their own order history and profile. No access to the admin panel at all.</td></tr>
+        <tr><td><strong>Admin</strong></td><td>Everything above, plus the full admin panel described in this guide.</td></tr>
+      </table>
+      </div>
+      <p>An admin can promote any customer to admin (or the reverse) from <strong>Users → Edit</strong> — useful for handing off management to someone else on your team later.</p>
+    </section>
+
+    <section id="faq">
+      <h2>Troubleshooting</h2>
+
+      <details>
+        <summary>I forgot my admin password</summary>
+        <p>Use "Forgot password?" on the regular login page (not the admin one) if your account has an email set up for reset links, or ask whoever manages the server to reset it directly — it's a one-line command on their end.</p>
+      </details>
+
+      <details>
+        <summary>"This account does not have admin access"</summary>
+        <p>You're logging into <code>/admin/login</code> with an email that exists but isn't marked as an admin. Ask an existing admin to promote your account under <strong>Users → Edit</strong>.</p>
+      </details>
+
+      <details>
+        <summary>A product's image isn't showing</summary>
+        <p>Open the product in <strong>Products</strong> and check an image has actually been uploaded — new products start with no photo (they show a placeholder). If a photo was uploaded and still isn't showing, tell your developer — it may need a quick server check.</p>
+      </details>
+
+      <details>
+        <summary>An order is stuck on "pending payment"</summary>
+        <p>Normal if the customer closed the payment window without finishing — the reserved stock is automatically released back to inventory. No action needed unless the customer says they were actually charged, in which case check <strong>Payments</strong> for that order and contact your developer if the gateway shows a successful charge that isn't reflected.</p>
+      </details>
+
+      <details>
+        <summary>I locked myself out after too many failed logins</summary>
+        <p>Wait 15 minutes and try again — this is an automatic anti-guessing protection, not something that needs to be manually cleared.</p>
+      </details>
+    </section>
+  </main>
+</div>
+
+<script>
+  (function () {
+    try {
+      var toggle = document.getElementById("tocToggle");
+      var toc = document.getElementById("toc");
+      if (toggle && toc) {
+        toggle.addEventListener("click", function () {
+          toc.classList.toggle("open");
+        });
+        toc.querySelectorAll("nav a").forEach(function (a) {
+          a.addEventListener("click", function () { toc.classList.remove("open"); });
+        });
+      }
+    } catch (e) {}
+  })();
+</script>

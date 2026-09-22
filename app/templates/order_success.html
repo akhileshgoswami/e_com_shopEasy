@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Order confirmed - {{ site_name }}{% endblock %}
+{% block content %}
+<div class="container py-5 text-center" style="max-width: 600px;">
+  <i class="bi bi-check-circle-fill text-success display-1"></i>
+  <h1 class="h3 mt-3">Thank you! Your order is confirmed.</h1>
+  <p class="text-muted">Order number <strong>{{ order.order_number }}</strong></p>
+
+  <div class="card card-body text-start my-4">
+    <div class="d-flex justify-content-between mb-1"><span class="text-muted">Payment method</span><span class="text-uppercase">{{ order.payment_method }}</span></div>
+    <div class="d-flex justify-content-between mb-1"><span class="text-muted">Payment status</span><span class="status-badge">{{ order.payment_status }}</span></div>
+    <div class="d-flex justify-content-between mb-1"><span class="text-muted">Order status</span><span class="status-badge">{{ order.order_status.replace('_',' ') }}</span></div>
+    <div class="d-flex justify-content-between fw-bold"><span>Total</span><span>₹{{ '%.2f'|format(order.total_amount) }}</span></div>
+  </div>
+
+  <a href="{{ url_for('checkout.order_detail', order_id=order.id) }}" class="btn btn-primary">View order details</a>
+  <a href="{{ url_for('shop.product_list') }}" class="btn btn-link">Continue shopping</a>
+</div>
+{% endblock %}

@@ -1,0 +1,24 @@
+{% extends "admin/base.html" %}
+{% block title %}Site content - Admin{% endblock %}
+{% block admin_content %}
+<h1 class="h3 mb-2">Site content</h1>
+<p class="text-muted mb-4">Edit the copy shown on the public About, Privacy Policy, Terms, and Contact pages — no deploy needed.</p>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table align-middle mb-0">
+      <thead><tr><th>Page / field</th><th>Preview</th><th>Last updated</th><th></th></tr></thead>
+      <tbody>
+      {% for item in items %}
+        <tr>
+          <td class="fw-semibold">{{ item.label }}{% if not item.is_customized %} <span class="badge bg-light text-dark border">default</span>{% endif %}</td>
+          <td class="text-muted small" style="max-width:420px;">{{ item.value[:140] }}{{ '…' if item.value|length > 140 }}</td>
+          <td class="small text-muted">{{ item.updated_at.strftime('%d %b %Y') if item.updated_at else '-' }}</td>
+          <td><a href="{{ url_for('admin.content_edit', key=item.key) }}" class="btn btn-sm btn-outline-secondary">Edit</a></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

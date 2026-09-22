@@ -1,0 +1,45 @@
+{% extends "admin/base.html" %}
+{% import "partials/pagination.html" as pg %}
+{% block title %}Inventory - Admin{% endblock %}
+{% block admin_content %}
+<h1 class="h3 mb-4">Inventory</h1>
+
+<div class="mb-3 d-flex gap-2">
+  <a href="{{ url_for('admin.inventory') }}" class="btn btn-sm btn-outline-secondary {{ 'active' if not filter_type }}">All</a>
+  <a href="{{ url_for('admin.inventory', filter='low_stock') }}" class="btn btn-sm btn-outline-warning {{ 'active' if filter_type == 'low_stock' }}">Low stock</a>
+  <a href="{{ url_for('admin.inventory', filter='out_of_stock') }}" class="btn btn-sm btn-outline-danger {{ 'active' if filter_type == 'out_of_stock' }}">Out of stock</a>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table align-middle mb-0">
+      <thead><tr><th>Product</th><th>SKU</th><th>Stock</th><th>Low stock threshold</th><th style="width:260px;">Update</th></tr></thead>
+      <tbody>
+      {% for product in products %}
+        <tr>
+          <td>{{ product.name }}</td>
+          <td class="text-muted small">{{ product.sku }}</td>
+          <td>
+            {% if product.stock_quantity == 0 %}<span class="badge bg-danger">0</span>
+            {% elif product.is_low_stock %}<span class="badge bg-warning text-dark">{{ product.stock_quantity }}</span>
+            {% else %}{{ product.stock_quantity }}{% endif %}
+          </td>
+          <td>{{ product.low_stock_threshold }}</td>
+          <td>
+            <form action="{{ url_for('admin.inventory_update', product_id=product.id) }}" method="post" class="d-flex gap-2 align-items-center">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="number" name="stock_quantity" value="{{ product.stock_quantity }}" min="0" class="form-control form-control-sm" style="width:90px;">
+              <input type="number" name="low_stock_threshold" value="{{ product.low_stock_threshold }}" min="0" class="form-control form-control-sm" style="width:90px;">
+              <button type="submit" class="btn btn-sm btn-primary">Save</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="text-center text-muted py-4">No products found.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{{ pg.render_pagination(pagination, 'admin.inventory', filter=filter_type) }}
+{% endblock %}

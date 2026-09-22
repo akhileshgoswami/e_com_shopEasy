@@ -1,0 +1,141 @@
+{% extends "admin/base.html" %}
+{% block title %}Order {{ order.order_number }} - Admin{% endblock %}
+{% block admin_content %}
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-4">
+  <div>
+    <h1 class="h4 mb-1">Order {{ order.order_number }}</h1>
+    <p class="text-muted small mb-0">Placed {{ order.created_at.strftime('%d %b %Y, %I:%M %p') }}</p>
+  </div>
+  <span class="badge bg-secondary status-badge fs-6">{{ order.order_status.replace('_',' ') }}</span>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-8">
+    <div class="card mb-4">
+      <div class="card-header fw-semibold">Customer</div>
+      <div class="card-body">
+        <p class="mb-1"><strong>{{ order.user.name }}</strong></p>
+        <p class="mb-1 small text-muted">{{ order.user.email }}</p>
+        <p class="mb-0 small text-muted">{{ order.user.phone or '-' }}</p>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header fw-semibold">Items</div>
+      <div class="table-responsive">
+        <table class="table mb-0">
+          <thead><tr><th>Product</th><th>SKU</th><th>Qty</th><th>Unit price</th><th>Subtotal</th></tr></thead>
+          <tbody>
+          {% for item in order.items %}
+            <tr>
+              <td>{{ item.product_name }}</td>
+              <td class="text-muted small">{{ item.sku }}</td>
+              <td>{{ item.quantity }}</td>
+              <td>₹{{ '%.2f'|format(item.unit_price) }}</td>
+              <td>₹{{ '%.2f'|format(item.subtotal) }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header fw-semibold">Payment</div>
+      <div class="card-body">
+        <div class="row">
+          <div class="col-md-6">
+            <p class="small mb-1"><span class="text-muted">Method:</span> <span class="text-uppercase">{{ order.payment_method }}</span></p>
+            <p class="small mb-2">
+              <span class="text-muted">Status:</span>
+              <span class="badge bg-{{ 'success' if order.payment_status == 'paid' else ('danger' if order.payment_status == 'failed' else 'warning text-dark') }}">{{ order.payment_status }}</span>
+            </p>
+            {% if order.payment_method == 'cod' and order.payment_status != 'paid' and order.order_status not in ('cancelled', 'failed', 'returned') %}
+            <form action="{{ url_for('admin.order_collect_payment', order_id=order.id) }}" method="post" data-confirm="Confirm cash has been collected from the customer for this order?">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-cash-coin"></i> Mark payment as collected</button>
+            </form>
+            {% endif %}
+          </div>
+          <div class="col-md-6">
+            <p class="small mb-1"><span class="text-muted">Razorpay order ID:</span> {{ order.razorpay_order_id or '-' }}</p>
+            <p class="small mb-1"><span class="text-muted">Razorpay payment ID:</span> {{ order.razorpay_payment_id or '-' }}</p>
+          </div>
+        </div>
+        {% if order.payments %}
+        <hr class="my-2">
+        <p class="small fw-semibold mb-2">Payment attempts</p>
+        {% for payment in order.payments %}
+        <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+          <div>
+            <span class="badge bg-{{ 'success' if payment.status == 'paid' else ('danger' if payment.status == 'failed' else 'secondary') }}">{{ payment.status }}</span>
+            <span class="small text-muted ms-1">{{ payment.provider }} &middot; ₹{{ '%.2f'|format(payment.amount) }} &middot; {{ payment.created_at.strftime('%d %b %Y, %I:%M %p') }}</span>
+            {% if payment.status == 'failed' and payment.raw_reference %}
+            <p class="small text-danger mb-0 mt-1"><i class="bi bi-exclamation-circle"></i> {{ payment.raw_reference }}</p>
+            {% elif payment.status == 'paid' %}
+            <p class="small text-success mb-0 mt-1"><i class="bi bi-check-circle"></i> Signature verified: {{ 'yes' if payment.signature_verified else 'no' }}</p>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header fw-semibold">Status timeline</div>
+      <div class="card-body">
+        <ul class="timeline">
+          {% for h in order.status_history %}
+          <li>
+            <strong class="status-badge">{{ h.old_status.replace('_',' ') if h.old_status else 'created' }} &rarr; {{ h.new_status.replace('_',' ') }}</strong>
+            <span class="text-muted small"> &mdash; {{ h.created_at.strftime('%d %b %Y, %I:%M %p') }} by {{ h.changed_by }}</span>
+            {% if h.note %}<p class="small text-muted mb-0">{{ h.note }}</p>{% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card card-body mb-3">
+      <h2 class="h6">Order summary</h2>
+      <div class="d-flex justify-content-between small mb-1"><span class="text-muted">Subtotal</span><span>₹{{ '%.2f'|format(order.subtotal) }}</span></div>
+      {% if order.discount %}<div class="d-flex justify-content-between small mb-1 text-success"><span>Discount</span><span>-₹{{ '%.2f'|format(order.discount) }}</span></div>{% endif %}
+      <div class="d-flex justify-content-between small mb-1"><span class="text-muted">Shipping</span><span>₹{{ '%.2f'|format(order.shipping_charge) }}</span></div>
+      {% if order.tax %}<div class="d-flex justify-content-between small mb-1"><span class="text-muted">Tax</span><span>₹{{ '%.2f'|format(order.tax) }}</span></div>{% endif %}
+      <hr>
+      <div class="d-flex justify-content-between fw-bold"><span>Total</span><span>₹{{ '%.2f'|format(order.total_amount) }}</span></div>
+    </div>
+
+    <div class="card card-body mb-3">
+      <h2 class="h6">Shipping address</h2>
+      <p class="mb-0 small">
+        {{ order.shipping_name }}<br>{{ order.shipping_phone }}<br>
+        {{ order.shipping_address }}<br>
+        {{ order.shipping_city }}, {{ order.shipping_state }} {{ order.shipping_postal_code }}<br>
+        {{ order.shipping_country }}
+      </p>
+    </div>
+
+    <div class="card card-body">
+      <h2 class="h6">Update status</h2>
+      {% if form.new_status.choices %}
+      <form method="post" action="{{ url_for('admin.order_status_update', order_id=order.id) }}">
+        {{ form.hidden_tag() }}
+        <div class="mb-2">
+          {{ form.new_status(class="form-select form-select-sm") }}
+        </div>
+        <div class="mb-2">
+          {{ form.note(class="form-control form-control-sm", placeholder="Note (optional)") }}
+        </div>
+        <button type="submit" class="btn btn-sm btn-primary w-100">Update status</button>
+      </form>
+      {% else %}
+      <p class="text-muted small mb-0">No further status transitions available for this order.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

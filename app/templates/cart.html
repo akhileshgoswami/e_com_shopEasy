@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Your cart - {{ site_name }}{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <h1 class="h3 mb-4">Your cart</h1>
+
+  {% if not cart.items %}
+  <div class="text-center py-5">
+    <i class="bi bi-cart-x display-1 text-muted"></i>
+    <p class="text-muted mt-3">Your cart is empty.</p>
+    <a href="{{ url_for('shop.product_list') }}" class="btn btn-primary">Start shopping</a>
+  </div>
+  {% else %}
+  <div class="row g-4">
+    <div class="col-lg-8">
+      <div class="card">
+        <div class="list-group list-group-flush">
+          {% for item in cart.items %}
+          <div class="list-group-item cart-item-row">
+            <div class="d-flex gap-3 align-items-center">
+              <img src="{{ item.product.image_url or url_for('static', filename='images/placeholder.svg') }}" alt="{{ item.product.name }}">
+              <div class="flex-grow-1">
+                <a href="{{ url_for('shop.product_detail', slug=item.product.slug) }}" class="text-decoration-none text-dark fw-semibold">{{ item.product.name }}</a>
+                <p class="mb-1 small text-muted">₹{{ '%.2f'|format(item.unit_price) }} each</p>
+                <form action="{{ url_for('cart.update_item', item_id=item.id) }}" method="post" class="d-flex align-items-center gap-2">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <div class="input-group input-group-sm" style="width: 120px;">
+                    <button class="btn btn-outline-secondary" type="button" onclick="const i=this.nextElementSibling; if(i.value>1){i.stepDown(); this.form.submit();}">-</button>
+                    <input type="number" name="quantity" value="{{ item.quantity }}" min="1" max="{{ item.product.stock_quantity }}" class="form-control text-center" onchange="this.form.submit()">
+                    <button class="btn btn-outline-secondary" type="button" onclick="const i=this.previousElementSibling; i.stepUp(); this.form.submit();">+</button>
+                  </div>
+                </form>
+              </div>
+              <div class="text-end">
+                <p class="fw-bold mb-1">₹{{ '%.2f'|format(item.subtotal) }}</p>
+                <form action="{{ url_for('cart.remove_item', item_id=item.id) }}" method="post">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="btn btn-link btn-sm text-danger p-0"><i class="bi bi-trash"></i> Remove</button>
+                </form>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-4 summary-sticky">
+      <div class="card card-body">
+        <h2 class="h5 mb-3">Order summary</h2>
+        <div class="d-flex justify-content-between mb-2">
+          <span class="text-muted">Subtotal ({{ totals.item_count }} item(s))</span>
+          <span>₹{{ '%.2f'|format(totals.subtotal) }}</span>
+        </div>
+        <p class="small text-muted">Shipping and taxes calculated at checkout.</p>
+        <a href="{{ url_for('checkout.checkout') }}" class="btn btn-primary w-100">Proceed to checkout <i class="bi bi-arrow-right"></i></a>
+        <a href="{{ url_for('shop.product_list') }}" class="btn btn-link w-100 mt-1">Continue shopping</a>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

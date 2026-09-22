@@ -1,0 +1,28 @@
+{% macro render_field(field, extra_class="") %}
+<div class="mb-3">
+  {% if field.type != 'BooleanField' %}
+  <label for="{{ field.id }}" class="form-label">{{ field.label.text }}</label>
+  {% endif %}
+
+  {% if field.type == 'BooleanField' %}
+    <div class="form-check">
+      {{ field(class="form-check-input" ~ (" is-invalid" if field.errors else "")) }}
+      <label class="form-check-label" for="{{ field.id }}">{{ field.label.text }}</label>
+    </div>
+  {% elif field.type in ('TextAreaField',) %}
+    {{ field(class="form-control" ~ (" is-invalid" if field.errors else "") ~ " " ~ extra_class, rows=4) }}
+  {% elif field.type == 'FileField' %}
+    {{ field(class="form-control" ~ (" is-invalid" if field.errors else "") ~ " " ~ extra_class) }}
+  {% elif field.type == 'SelectField' %}
+    {{ field(class="form-select" ~ (" is-invalid" if field.errors else "") ~ " " ~ extra_class) }}
+  {% else %}
+    {{ field(class="form-control" ~ (" is-invalid" if field.errors else "") ~ " " ~ extra_class) }}
+  {% endif %}
+
+  {% if field.errors %}
+    {% for error in field.errors %}
+    <div class="invalid-feedback d-block">{{ error }}</div>
+    {% endfor %}
+  {% endif %}
+</div>
+{% endmacro %}

@@ -1,0 +1,16 @@
+{% extends "admin/base.html" %}
+{% block title %}Settings - Admin{% endblock %}
+{% block admin_content %}
+<h1 class="h3 mb-4">Settings</h1>
+<div class="card">
+  <div class="list-group list-group-flush">
+    {% for key, value in overview.items() %}
+    <div class="list-group-item d-flex justify-content-between">
+      <span class="text-muted">{{ key }}</span>
+      <span class="fw-semibold">{{ value }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+<p class="text-muted small mt-3">These settings are configured via environment variables / Secret Manager and are read-only here. Update them in your deployment configuration and redeploy to change them.</p>
+{% endblock %}

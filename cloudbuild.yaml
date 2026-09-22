@@ -1,0 +1,65 @@
+# Alternative to .github/workflows/deploy.yml for teams using Cloud Build
+# instead of GitHub Actions. Trigger this from a Cloud Build GitHub trigger
+# on pushes to main, or run manually:
+#   gcloud builds submit --config=cloudbuild.yaml \
+#     --substitutions=_REGION=asia-south1,_REPO_NAME=ecom-repo,_SERVICE_NAME=ecom-web,_CLOUDSQL_CONNECTION_NAME=PROJECT:REGION:INSTANCE
+
+steps:
+  - id: install-and-test
+    name: python:3.12-slim
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        pip install -r requirements.txt --quiet
+        pytest -q
+
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/ecom-web:${SHORT_SHA}"
+      - .
+
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/ecom-web:${SHORT_SHA}"
+
+  - id: migrate
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        gcloud run jobs deploy ecom-migrate \
+          --image="${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/ecom-web:${SHORT_SHA}" \
+          --region="${_REGION}" \
+          --project="${PROJECT_ID}" \
+          --set-cloudsql-instances="${_CLOUDSQL_CONNECTION_NAME}" \
+          --set-env-vars="FLASK_APP=wsgi.py,FLASK_ENV=production,INSTANCE_CONNECTION_NAME=${_CLOUDSQL_CONNECTION_NAME},DB_NAME=ecom_db,DB_USER=ecom_user,GOOGLE_CLOUD_PROJECT=${PROJECT_ID}" \
+          --set-secrets="SECRET_KEY=ecom-flask-secret-key:latest,DB_PASSWORD=ecom-db-password:latest,RAZORPAY_KEY_ID=ecom-razorpay-key-id:latest,RAZORPAY_KEY_SECRET=ecom-razorpay-key-secret:latest,RAZORPAY_WEBHOOK_SECRET=ecom-razorpay-webhook-secret:latest" \
+          --command="flask" \
+          --args="db,upgrade" \
+          --max-retries=0
+        gcloud run jobs execute ecom-migrate --region="${_REGION}" --project="${PROJECT_ID}" --wait
+
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - "${_SERVICE_NAME}"
+      - "--image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/ecom-web:${SHORT_SHA}"
+      - "--region=${_REGION}"
+      - "--platform=managed"
+      - "--quiet"
+
+images:
+  - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/ecom-web:${SHORT_SHA}"
+
+options:
+  logging: CLOUD_LOGGING_ONLY

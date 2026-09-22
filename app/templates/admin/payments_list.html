@@ -1,0 +1,43 @@
+{% extends "admin/base.html" %}
+{% import "partials/pagination.html" as pg %}
+{% block title %}Payments - Admin{% endblock %}
+{% block admin_content %}
+<h1 class="h3 mb-4">Payments</h1>
+
+<form method="get" class="mb-3 d-flex gap-2">
+  <select name="status" class="form-select" style="max-width:200px;" onchange="this.form.submit()">
+    <option value="">All statuses</option>
+    <option value="pending" {{ 'selected' if status == 'pending' }}>Pending</option>
+    <option value="paid" {{ 'selected' if status == 'paid' }}>Paid</option>
+    <option value="failed" {{ 'selected' if status == 'failed' }}>Failed</option>
+    <option value="refunded" {{ 'selected' if status == 'refunded' }}>Refunded</option>
+  </select>
+</form>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table align-middle mb-0">
+      <thead><tr><th>Order</th><th>Provider</th><th>Provider payment ID</th><th>Amount</th><th>Status</th><th>Verified</th><th>Details</th><th>Date</th></tr></thead>
+      <tbody>
+      {% for payment in payments %}
+        <tr>
+          <td><a href="{{ url_for('admin.order_detail', order_id=payment.order_id) }}">{{ payment.order.order_number }}</a></td>
+          <td class="text-uppercase small">{{ payment.provider }}</td>
+          <td class="text-muted small">{{ payment.provider_payment_id or '-' }}</td>
+          <td>₹{{ '%.2f'|format(payment.amount) }}</td>
+          <td><span class="badge bg-{{ 'success' if payment.status == 'paid' else ('danger' if payment.status == 'failed' else 'secondary') }}">{{ payment.status }}</span></td>
+          <td>{{ 'Yes' if payment.signature_verified else 'No' }}</td>
+          <td class="small {{ 'text-danger' if payment.status == 'failed' }}" style="max-width:260px;">
+            {% if payment.status == 'failed' and payment.raw_reference %}{{ payment.raw_reference[:120] }}{% else %}-{% endif %}
+          </td>
+          <td class="small text-muted">{{ payment.created_at.strftime('%d %b %Y %H:%M') }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="8" class="text-center text-muted py-4">No payments found.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{{ pg.render_pagination(pagination, 'admin.payments', status=status) }}
+{% endblock %}

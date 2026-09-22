@@ -1,0 +1,76 @@
+{% extends "admin/base.html" %}
+{% import "partials/forms.html" as f %}
+{% block title %}{{ 'New product' if is_new else 'Edit product' }} - Admin{% endblock %}
+{% block admin_content %}
+<h1 class="h3 mb-4">{{ 'New product' if is_new else 'Edit product: ' + product.name }}</h1>
+
+<div class="row g-4">
+  <div class="col-lg-8">
+    <div class="card card-body">
+      <form method="post">
+        {{ form.hidden_tag() }}
+        <div class="row">
+          <div class="col-md-6">{{ f.render_field(form.category_id) }}</div>
+          <div class="col-md-6">{{ f.render_field(form.subcategory_id) }}</div>
+        </div>
+        {{ f.render_field(form.name) }}
+        {{ f.render_field(form.sku) }}
+        {{ f.render_field(form.short_description) }}
+        {{ f.render_field(form.description) }}
+        <div class="row">
+          <div class="col-md-6">{{ f.render_field(form.price) }}</div>
+          <div class="col-md-6">{{ f.render_field(form.sale_price) }}</div>
+        </div>
+        <div class="row">
+          <div class="col-md-6">{{ f.render_field(form.stock_quantity) }}</div>
+          <div class="col-md-6">{{ f.render_field(form.low_stock_threshold) }}</div>
+        </div>
+        {{ f.render_field(form.is_active) }}
+        <button type="submit" class="btn btn-primary">{{ 'Create product' if is_new else 'Save changes' }}</button>
+        <a href="{{ url_for('admin.products') }}" class="btn btn-link">Cancel</a>
+      </form>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    {% if not is_new %}
+    <div class="card card-body mb-3">
+      <h2 class="h6">Product images</h2>
+      <form method="post" action="{{ url_for('admin.product_image_upload', product_id=product.id) }}" enctype="multipart/form-data" class="mb-3">
+        {{ image_form.hidden_tag() }}
+        {{ image_form.image(class="form-control form-control-sm mb-2") }}
+        <button type="submit" class="btn btn-sm btn-secondary w-100">Upload image</button>
+      </form>
+
+      <div class="row g-2">
+        {% for image in product.images %}
+        <div class="col-6">
+          <div class="border rounded p-1 text-center {{ 'border-primary' if image.image_url == product.image_url }}">
+            <img src="{{ image.image_url }}" class="img-fluid mb-1" style="aspect-ratio:1/1;object-fit:contain;background:#fafbfc;border:1px solid #e7ebf0;border-radius:0.375rem;">
+            <div class="d-flex justify-content-center gap-1">
+              {% if image.image_url != product.image_url %}
+              <form action="{{ url_for('admin.product_image_set_main', product_id=product.id, image_id=image.id) }}" method="post">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-xs btn-outline-primary" style="font-size:0.7rem;">Set main</button>
+              </form>
+              {% else %}
+              <span class="badge bg-primary" style="font-size:0.65rem;">Main</span>
+              {% endif %}
+              <form action="{{ url_for('admin.product_image_delete', product_id=product.id, image_id=image.id) }}" method="post" data-confirm="Delete this image?">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-xs btn-outline-danger" style="font-size:0.7rem;">Delete</button>
+              </form>
+            </div>
+          </div>
+        </div>
+        {% else %}
+        <p class="text-muted small mb-0">No images uploaded yet.</p>
+        {% endfor %}
+      </div>
+    </div>
+    {% else %}
+    <div class="alert alert-info small">Save the product first, then you'll be able to upload images.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

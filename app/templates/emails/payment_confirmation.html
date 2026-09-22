@@ -1,0 +1,6 @@
+{% extends "emails/base_email.html" %}
+{% block email_body %}
+<h2>Payment received &mdash; {{ order.order_number }}</h2>
+<p>Hi {{ order.user.name }}, we've received your payment of ₹{{ '%.2f'|format(order.total_amount) }} for order {{ order.order_number }}.</p>
+<p>Your order is now being processed.</p>
+{% endblock %}
