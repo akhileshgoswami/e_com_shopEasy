@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 
 
 def _bool(value, default=False):
@@ -24,11 +25,19 @@ class BaseConfig:
     REMEMBER_COOKIE_HTTPONLY = True
     REMEMBER_COOKIE_SAMESITE = "Lax"
     REMEMBER_COOKIE_SECURE = _bool(os.environ.get("SESSION_COOKIE_SECURE"), False)
+    # Logins survive closing the browser and stay valid for this long after
+    # the last visit (every request pushes the expiry forward). "Remember me"
+    # keeps people signed in far longer via REMEMBER_COOKIE_DURATION.
+    PERMANENT_SESSION_LIFETIME = timedelta(minutes=int(os.environ.get("SESSION_LIFETIME_MINUTES", 480)))
+    SESSION_REFRESH_EACH_REQUEST = True
+    REMEMBER_COOKIE_DURATION = timedelta(days=int(os.environ.get("REMEMBER_COOKIE_DAYS", 14)))
+    # CSRF tokens live as long as the session instead of a fixed hour, so a
+    # form left open doesn't fail with "CSRF token has expired".
+    WTF_CSRF_TIME_LIMIT = None
     # Behind Cloud Run / a load balancer, trust one hop of X-Forwarded-* so
     # url_for(_external=True) builds https:// URLs (Google OAuth redirect_uri
     # must match exactly what's registered in Google Cloud Console).
     TRUST_PROXY_HEADERS = _bool(os.environ.get("TRUST_PROXY_HEADERS"), False)
-    REMEMBER_COOKIE_DURATION_DAYS = 14
 
     RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID")
     RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET")

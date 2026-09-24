@@ -77,6 +77,15 @@ def _register_login_manager(app):
     def load_user(user_id):
         return User.find(user_id)
 
+    from flask import session
+    from flask_login import user_logged_in
+
+    @user_logged_in.connect_via(app)
+    def _keep_session_after_browser_closes(_sender, user, **_extra):
+        # Every login path (email, Google, admin, register) goes through
+        # login_user(), which fires this signal.
+        session.permanent = True
+
     @login_manager.unauthorized_handler
     def unauthorized():
         from flask import flash, redirect, url_for
