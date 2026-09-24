@@ -20,6 +20,7 @@
 <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
 {% include "partials/theme_style.html" %}
 {% block extra_head %}{% endblock %}
+<script>window.CSRF_TOKEN = "{{ csrf_token() }}";</script>
 </head>
 {# Floating cart shortcut on phones, only when there's something in it and
    not on the cart/checkout pages themselves. #}
@@ -51,7 +52,6 @@
 {% endif %}
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script>window.CSRF_TOKEN = "{{ csrf_token() }}";</script>
 <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 {% block extra_scripts %}{% endblock %}
 </body>

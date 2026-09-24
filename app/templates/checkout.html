@@ -144,17 +144,16 @@
         </div>
 
         <div class="card card-body mb-3">
-          <form action="{{ url_for('checkout.apply_coupon') }}" method="post" class="d-flex gap-2">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="text" name="coupon_code" class="form-control form-control-sm" placeholder="Coupon code" value="{{ coupon_code }}">
-            <button type="submit" class="btn btn-outline-primary btn-sm">Apply</button>
-          </form>
+          {# This sits inside checkoutForm, and nested <form>s are dropped by the
+             browser, so these controls post their own forms (defined below)
+             via form="..." — otherwise "Apply" would place the order. #}
+          <div class="d-flex gap-2">
+            <input type="text" name="coupon_code" form="applyCouponForm" class="form-control form-control-sm" placeholder="Coupon code" value="{{ coupon_code }}" aria-label="Coupon code">
+            <button type="submit" form="applyCouponForm" class="btn btn-outline-primary btn-sm">Apply</button>
+          </div>
           {% if summary.coupon_error %}<p class="text-danger small mt-2 mb-0">{{ summary.coupon_error }}</p>{% endif %}
-          {% if coupon_code and not summary.coupon_error %}
-          <form action="{{ url_for('checkout.remove_coupon') }}" method="post" class="mt-2">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-link btn-sm text-danger p-0">Remove coupon</button>
-          </form>
+          {% if coupon_code %}
+          <button type="submit" form="removeCouponForm" class="btn btn-link btn-sm text-danger p-0 mt-2 align-self-start">Remove coupon</button>
           {% endif %}
         </div>
 
@@ -166,6 +165,12 @@
   </form>
 
   <form id="addAddressForm" action="{{ url_for('checkout.add_checkout_address') }}" method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  </form>
+  <form id="applyCouponForm" action="{{ url_for('checkout.apply_coupon') }}" method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  </form>
+  <form id="removeCouponForm" action="{{ url_for('checkout.remove_coupon') }}" method="post">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   </form>
 </div>

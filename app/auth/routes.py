@@ -20,13 +20,24 @@ from app.extensions import limiter, oauth
 from app.models import Address, Order
 from app.services.email_service import EmailService
 from app.utils import newest_first
+from app.wishlist.routes import PENDING_WISHLIST_SESSION_KEY
+from app.wishlist.services import WishlistError, WishlistService
 
 GOOGLE_OAUTH_NEXT_SESSION_KEY = "google_oauth_next"
 
 
 def _apply_pending_cart_action():
     """After login/register, replay an add-to-cart action that was
-    interrupted by the auth requirement, so the user's intent is preserved."""
+    interrupted by the auth requirement, so the user's intent is preserved.
+    A heart tapped while logged out is saved the same way."""
+    wishlist_product = session.pop(PENDING_WISHLIST_SESSION_KEY, None)
+    if wishlist_product:
+        try:
+            WishlistService.add(current_user, wishlist_product)
+            flash("Saved to your wishlist.", "success")
+        except WishlistError as exc:
+            flash(str(exc), "warning")
+
     pending = session.pop(PENDING_CART_SESSION_KEY, None)
     if not pending:
         return None

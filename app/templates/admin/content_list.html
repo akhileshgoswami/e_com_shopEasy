@@ -13,7 +13,7 @@
         <tr>
           <td class="fw-semibold">{{ item.label }}{% if not item.is_customized %} <span class="badge bg-light text-dark border">default</span>{% endif %}</td>
           <td class="text-muted small" style="max-width:420px;">{{ item.value[:140] }}{{ '…' if item.value|length > 140 }}</td>
-          <td class="small text-muted">{{ item.updated_at.strftime('%d %b %Y') if item.updated_at else '-' }}</td>
+          <td class="small text-muted">{{ item.updated_at|ist('%d %b %Y') }}</td>
           <td><a href="{{ url_for('admin.content_edit', key=item.key) }}" class="btn btn-sm btn-outline-secondary">Edit</a></td>
         </tr>
       {% endfor %}

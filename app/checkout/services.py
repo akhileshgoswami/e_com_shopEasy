@@ -1,7 +1,7 @@
 import logging
 import random
 import string
-from datetime import datetime, timezone
+from datetime import datetime
 from decimal import Decimal
 
 from google.cloud import ndb
@@ -24,6 +24,7 @@ from app.services.email_service import EmailService
 from app.services.inventory_service import InsufficientStockError, InventoryService
 from app.services.payment_settings_service import PaymentSettingsService
 from app.services.site_content_service import StorefrontService
+from app.utils import IST
 
 logger = logging.getLogger("app.checkout")
 
@@ -33,7 +34,8 @@ class CheckoutError(Exception):
 
 
 def _generate_order_number():
-    today = datetime.now(timezone.utc).strftime("%Y%m%d")
+    # India date, so an order at 1 AM IST isn't stamped with yesterday.
+    today = datetime.now(IST).strftime("%Y%m%d")
     for _ in range(10):
         suffix = "".join(random.choices(string.digits + string.ascii_uppercase, k=6))
         candidate = f"ORD-{today}-{suffix}"

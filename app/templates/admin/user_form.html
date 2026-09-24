@@ -4,7 +4,7 @@
 {% block admin_content %}
 <h1 class="h3 mb-4">Edit user</h1>
 <div class="card card-body" style="max-width: 480px;">
-  <p class="text-muted small">{{ user.email }} &middot; joined {{ user.created_at.strftime('%d %b %Y') }}</p>
+  <p class="text-muted small">{{ user.email }} &middot; joined {{ user.created_at|ist('%d %b %Y') }}</p>
   <form method="post">
     {{ form.hidden_tag() }}
     {{ f.render_field(form.name) }}

@@ -1,0 +1,14 @@
+{#- Heart toggle for a product. Works as a plain form post; main.js upgrades
+    it to an in-place toggle. -#}
+{% macro wishlist_button(product, extra_class="") -%}
+{%- set saved = in_wishlist(product.id) -%}
+<form action="{{ url_for('wishlist.toggle') }}" method="post" class="wishlist-form {{ extra_class }}" data-wishlist-form>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="product_id" value="{{ product.id }}">
+  <button type="submit" class="wishlist-btn{{ ' is-active' if saved }}" aria-pressed="{{ 'true' if saved else 'false' }}"
+          aria-label="{{ 'Remove ' ~ product.name ~ ' from wishlist' if saved else 'Save ' ~ product.name ~ ' to wishlist' }}"
+          title="{{ 'Remove from wishlist' if saved else 'Save to wishlist' }}">
+    <i class="bi {{ 'bi-heart-fill' if saved else 'bi-heart' }}"></i>
+  </button>
+</form>
+{%- endmacro %}

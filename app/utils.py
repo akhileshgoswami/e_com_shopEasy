@@ -1,5 +1,10 @@
 import math
-from datetime import timezone
+from datetime import timedelta, timezone
+
+
+# Everything is stored in UTC; customers and admins are shown India time.
+# IST has no daylight saving, so a fixed offset is exact (and needs no tzdata).
+IST = timezone(timedelta(hours=5, minutes=30), "IST")
 
 
 def as_aware_utc(dt):
@@ -76,3 +81,10 @@ class Pagination:
 
 def newest_first(entities):
     return sorted(entities, key=lambda e: e.created_at, reverse=True)
+
+
+def to_ist(dt):
+    """UTC (aware, or naive assumed UTC) -> IST for display."""
+    if dt is None:
+        return None
+    return as_aware_utc(dt).astimezone(IST)

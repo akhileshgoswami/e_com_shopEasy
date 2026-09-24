@@ -5,7 +5,7 @@ from app.auth.forms import AddressForm
 from app.cart.routes import BUY_NOW_SESSION_KEY
 from app.checkout import checkout_bp
 from app.checkout.services import CheckoutError, CheckoutService
-from app.models import Address, OrderStatus, PaymentMethod
+from app.models import Address, OrderStatus, PaymentMethod, PaymentStatus
 from app.services.order_service import OrderService, OrderTransitionError
 from app.services.payment_settings_service import PaymentSettingsService
 
@@ -123,17 +123,34 @@ def order_success(order_id):
 
 @checkout_bp.route("/checkout/cancel/<int:order_id>", methods=["POST"])
 @login_required
-def cancel_pending_order(order_id):
+def cancel_order(order_id):
     order = OrderService.get_user_order_or_404(current_user, order_id)
-    if order.order_status != OrderStatus.PENDING_PAYMENT:
-        flash("This order can no longer be cancelled here.", "danger")
-        return redirect(url_for("checkout.my_orders"))
+    back = url_for("checkout.order_detail", order_id=order.id)
+    if order.order_status not in OrderStatus.CUSTOMER_CANCELLABLE:
+        flash("This order can no longer be cancelled. Please contact support.", "danger")
+        return redirect(back)
+
+    reason = request.form.get("reason", "").strip()
+    if reason not in OrderStatus.CANCEL_REASONS:
+        reason = OrderStatus.CANCEL_REASONS[0]
+    details = request.form.get("reason_details", "").strip()[:300]
+    if reason == OrderStatus.OTHER_REASON and not details:
+        flash("Please tell us why you're cancelling.", "danger")
+        return redirect(back)
+
+    note = f"Cancelled by customer: {details if reason == OrderStatus.OTHER_REASON else reason}"
+    if details and reason != OrderStatus.OTHER_REASON:
+        note += f" ({details})"
+    refund_due = order.payment_status == PaymentStatus.PAID
+    if refund_due:
+        note += " Refund due."
     try:
-        OrderService.change_status(order, OrderStatus.CANCELLED, changed_by=current_user.email, note="Cancelled by customer.")
-        flash("Order cancelled.", "info")
+        OrderService.change_status(order, OrderStatus.CANCELLED, changed_by=current_user.email, note=note)
     except OrderTransitionError as exc:
         flash(str(exc), "danger")
-    return redirect(url_for("checkout.my_orders"))
+        return redirect(back)
+    flash("Order cancelled." + (" Your refund will be processed to the original payment method." if refund_due else ""), "info")
+    return redirect(back)
 
 
 @checkout_bp.route("/orders")
@@ -148,4 +165,10 @@ def my_orders():
 @login_required
 def order_detail(order_id):
     order = OrderService.get_user_order_or_404(current_user, order_id)
-    return render_template("order_detail.html", order=order)
+    return render_template(
+        "order_detail.html",
+        order=order,
+        cancellable_statuses=OrderStatus.CUSTOMER_CANCELLABLE,
+        cancel_reasons=OrderStatus.CANCEL_REASONS,
+        other_reason=OrderStatus.OTHER_REASON,
+    )

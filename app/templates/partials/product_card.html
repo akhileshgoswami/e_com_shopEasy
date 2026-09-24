@@ -1,12 +1,14 @@
+{% import "partials/wishlist_button.html" as wl %}
 {% macro product_card(product) %}
 <div class="col-6 col-md-4 col-lg-3">
   <div class="card product-card h-100">
+    {{ wl.wishlist_button(product, "wishlist-form-card") }}
     <a href="{{ url_for('shop.product_detail', slug=product.slug) }}" class="product-image-link">
       {% if product.is_on_sale %}
       <span class="badge bg-danger position-absolute top-0 start-0 m-2">-{{ product.discount_percent }}%</span>
       {% endif %}
       {% if not product.in_stock %}
-      <span class="badge bg-secondary position-absolute top-0 end-0 m-2">Out of stock</span>
+      <span class="badge bg-secondary position-absolute bottom-0 start-0 m-2">Out of stock</span>
       {% endif %}
       <img src="{{ product.image_url or url_for('static', filename='images/placeholder.svg') }}" class="card-img-top product-image" alt="{{ product.name }}" loading="lazy">
     </a>
@@ -25,10 +27,15 @@
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="product_id" value="{{ product.id }}">
           <input type="hidden" name="quantity" value="1">
-          {% if product.in_stock and product.has_sizes %}
-          <div class="small text-muted mb-1 text-truncate">{{ product.display_size_label }}: {{ product.sizes|selectattr('in_stock')|map(attribute='name')|join(', ') }}</div>
-          <a href="{{ url_for('shop.product_detail', slug=product.slug) }}" class="btn btn-primary btn-sm w-100">Choose {{ product.display_size_label|lower }}</a>
-          {% elif product.in_stock %}
+          {% if product.in_stock %}
+          {% if product.has_sizes %}
+          {# First in-stock size is pre-selected so the card can add straight to cart. #}
+          <select name="size" class="form-select form-select-sm mb-2 card-size-select" aria-label="{{ product.display_size_label }} for {{ product.name }}">
+            {% for size in product.sizes|selectattr('in_stock') %}
+            <option value="{{ size.name }}">{{ product.display_size_label }}: {{ size.name }}</option>
+            {% endfor %}
+          </select>
+          {% endif %}
           <div class="card-actions">
             <button type="submit" class="btn btn-outline-primary btn-sm card-add-btn" aria-label="Add {{ product.name }} to cart" title="Add to cart">
               <i class="bi bi-cart-plus"></i>

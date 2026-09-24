@@ -106,18 +106,34 @@ def test_verify_payment_signature_failure(mock_create_order, mock_verify, client
     assert order.payment_status != PaymentStatus.PAID
 
 
-def test_payment_failure_restores_stock(client, customer, product, address):
+@patch("app.payments.routes.RazorpayService.create_order")
+def test_payment_failure_keeps_order_retryable(mock_create_order, client, customer, product, address):
     initial_stock = product.stock_quantity
     order = _create_razorpay_order(client, customer, product, address)
-    product = reload(product)
-    assert product.stock_quantity == initial_stock - 1
 
     resp = client.post("/payment/razorpay/failed", json={"order_id": order.id, "reason": "User cancelled"})
     assert resp.status_code == 200
 
     order = reload(order)
     product = reload(product)
-    assert order.order_status == OrderStatus.FAILED
+    assert order.order_status == OrderStatus.PENDING_PAYMENT
+    assert product.stock_quantity == initial_stock - 1  # still reserved for the retry
+
+    mock_create_order.side_effect = _fake_create_order()
+    resp = client.post("/payment/razorpay/create-order", json={"order_id": order.id})
+    assert resp.status_code == 200 and resp.get_json()["success"] is True
+
+
+def test_cancelling_pending_order_restores_stock(client, customer, product, address):
+    initial_stock = product.stock_quantity
+    order = _create_razorpay_order(client, customer, product, address)
+    client.post("/payment/razorpay/failed", json={"order_id": order.id, "reason": "User cancelled"})
+
+    client.post(f"/checkout/cancel/{order.id}")
+
+    order = reload(order)
+    product = reload(product)
+    assert order.order_status == OrderStatus.CANCELLED
     assert order.stock_committed is False
     assert product.stock_quantity == initial_stock  # restored
 
@@ -203,3 +219,11 @@ def test_webhook_invalid_signature_rejected(mock_verify, client):
         headers={"X-Razorpay-Signature": "invalid"},
     )
     assert resp.status_code == 400
+
+
+def test_payment_page_defines_csrf_token_before_starting_payment(client, customer, product, address):
+    # The page kicks off create-order as soon as its inline script runs, so the
+    # token must already be on window by then or the first attempt 400s.
+    order = _create_razorpay_order(client, customer, product, address)
+    html = client.get(f"/payment/pay/{order.id}").get_data(as_text=True)
+    assert html.index("window.CSRF_TOKEN =") < html.index("payment/razorpay/create-order")

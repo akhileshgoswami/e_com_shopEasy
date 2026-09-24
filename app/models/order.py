@@ -48,6 +48,31 @@ class OrderStatus:
     STOCK_RESTORING = (CANCELLED, FAILED, RETURNED)
     TERMINAL = (DELIVERED, CANCELLED, FAILED, RETURNED, REFUNDED)
 
+    # a customer can cancel on their own until the order is being packed
+    CUSTOMER_CANCELLABLE = (PENDING_PAYMENT, PLACED, CONFIRMED)
+
+    # preset reasons offered when cancelling; the first is pre-selected and
+    # "Other" asks for the customer's own words
+    OTHER_REASON = "Other"
+    CANCEL_REASONS = (
+        "Ordered by mistake",
+        "Found a better price elsewhere",
+        "Delivery is taking too long",
+        "Want to change size, colour or quantity",
+        "Want to change the delivery address",
+        "Changed my mind",
+        OTHER_REASON,
+    )
+    ADMIN_CANCEL_REASONS = (
+        "Customer requested cancellation",
+        "Item out of stock",
+        "Unable to deliver to this address",
+        "Customer unreachable for confirmation",
+        "Suspected fraudulent order",
+        "Payment not received",
+        OTHER_REASON,
+    )
+
     # allowed forward transitions for admin-driven status changes
     TRANSITIONS = {
         PENDING_PAYMENT: (PLACED, FAILED, CANCELLED),

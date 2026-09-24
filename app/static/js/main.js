@@ -118,20 +118,71 @@
     }
     thumbs.forEach((btn) => btn.addEventListener("click", () => show(Number(btn.dataset.thumb))));
 
+    // Magnify the spot under (clientX, clientY).
+    function magnifyAt(clientX, clientY) {
+      const rect = stage.getBoundingClientRect();
+      const x = Math.min(100, Math.max(0, ((clientX - rect.left) / rect.width) * 100));
+      const y = Math.min(100, Math.max(0, ((clientY - rect.top) / rect.height) * 100));
+      main.style.transformOrigin = x + "% " + y + "%";
+      stage.classList.add("is-zoomed");
+    }
+
     if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
       stage.addEventListener("mousemove", (event) => {
         if (event.target.closest("[data-zoom-open]")) {
           stage.classList.remove("is-zoomed");
           return;
         }
-        const rect = stage.getBoundingClientRect();
-        const x = ((event.clientX - rect.left) / rect.width) * 100;
-        const y = ((event.clientY - rect.top) / rect.height) * 100;
-        main.style.transformOrigin = x + "% " + y + "%";
-        stage.classList.add("is-zoomed");
+        magnifyAt(event.clientX, event.clientY);
       });
       stage.addEventListener("mouseleave", () => stage.classList.remove("is-zoomed"));
     }
+
+    // Touch: the same magnifier on press-and-hold, following the finger until
+    // it lifts. A quick swipe still scrolls the page and a tap still opens
+    // the full-screen viewer.
+    const HOLD_MS = 220;
+    let hold = null;
+    let suppressClick = false;
+    stage.addEventListener("touchstart", (event) => {
+      if (event.touches.length !== 1 || event.target.closest("[data-zoom-open]")) return;
+      const touch = event.touches[0];
+      hold = { x: touch.clientX, y: touch.clientY, active: false };
+      hold.timer = setTimeout(() => {
+        if (!hold) return;
+        hold.active = true;
+        magnifyAt(hold.x, hold.y);
+      }, HOLD_MS);
+    }, { passive: true });
+    stage.addEventListener("touchmove", (event) => {
+      if (!hold) return;
+      const touch = event.touches[0];
+      if (hold.active) {
+        event.preventDefault(); // keep the page still while magnifying
+        magnifyAt(touch.clientX, touch.clientY);
+      } else if (Math.abs(touch.clientX - hold.x) + Math.abs(touch.clientY - hold.y) > 10) {
+        clearTimeout(hold.timer); // it's a scroll, not a hold
+        hold = null;
+      } else {
+        hold.x = touch.clientX;
+        hold.y = touch.clientY;
+      }
+    }, { passive: false });
+    function endHold() {
+      if (!hold) return;
+      clearTimeout(hold.timer);
+      if (hold.active) {
+        stage.classList.remove("is-zoomed");
+        suppressClick = true; // the lift shouldn't also open the viewer
+        setTimeout(() => { suppressClick = false; }, 400);
+      }
+      hold = null;
+    }
+    stage.addEventListener("touchend", endHold);
+    stage.addEventListener("touchcancel", endHold);
+    stage.addEventListener("contextmenu", (event) => {
+      if (stage.classList.contains("is-zoomed")) event.preventDefault();
+    });
 
     if (!modalEl || !window.bootstrap) return;
     const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
@@ -185,6 +236,7 @@
     }
 
     stage.addEventListener("click", () => {
+      if (suppressClick) return;
       open(current);
       modal.show();
     });
@@ -289,4 +341,85 @@ document.addEventListener("DOMContentLoaded", function () {
   if (select) {
     select.addEventListener("change", function () { activate(select.value); });
   }
+});
+
+// Home hero: let the header sit transparently over it, turning solid on scroll.
+document.addEventListener("DOMContentLoaded", function () {
+  const header = document.querySelector(".sky-header");
+  const hero = document.querySelector("main > .sky-hero:first-child");
+  if (!header || !hero) return;
+
+  const topbar = document.querySelector(".sky-topbar");
+  const root = document.documentElement;
+  function measure() {
+    const topbarH = topbar && topbar.offsetParent !== null ? topbar.offsetHeight : 0;
+    root.style.setProperty("--chrome-h", topbarH + header.offsetHeight + "px");
+  }
+  function onScroll() {
+    header.classList.toggle("is-scrolled", window.scrollY > 8);
+  }
+
+  measure();
+  onScroll();
+  document.body.classList.add("header-overlay");
+  window.addEventListener("scroll", onScroll, { passive: true });
+  // Header grows when the mobile search row opens or the viewport changes.
+  if ("ResizeObserver" in window) {
+    const observer = new ResizeObserver(measure);
+    observer.observe(header);
+    if (topbar) observer.observe(topbar);
+  } else {
+    window.addEventListener("resize", measure);
+  }
+});
+
+// Wishlist hearts: toggle in place instead of reloading the page.
+document.addEventListener("submit", function (event) {
+  const form = event.target.closest("[data-wishlist-form]");
+  if (!form) return;
+  event.preventDefault();
+  const button = form.querySelector("button");
+  button.disabled = true;
+
+  fetch(form.action, {
+    method: "POST",
+    headers: { "X-Requested-With": "XMLHttpRequest", "X-CSRFToken": window.CSRF_TOKEN || "" },
+    body: new FormData(form),
+  })
+    .then((res) => res.json())
+    .then((data) => {
+      if (data.auth_required && data.redirect) {
+        window.location.href = data.redirect;
+        return;
+      }
+      if (!data.success) {
+        form.submit(); // let the server flash the reason
+        return;
+      }
+      const productId = form.querySelector("input[name=product_id]").value;
+      // The same product can appear twice on a page (detail + related).
+      document.querySelectorAll("[data-wishlist-form]").forEach((other) => {
+        if (other.querySelector("input[name=product_id]").value !== productId) return;
+        const btn = other.querySelector("button");
+        btn.classList.toggle("is-active", data.in_wishlist);
+        btn.setAttribute("aria-pressed", data.in_wishlist ? "true" : "false");
+        btn.title = data.in_wishlist ? "Remove from wishlist" : "Save to wishlist";
+        btn.querySelector("i").className = "bi " + (data.in_wishlist ? "bi-heart-fill" : "bi-heart");
+      });
+      document.querySelectorAll(".wishlist-badge-count").forEach((el) => {
+        el.textContent = data.count;
+        el.classList.toggle("d-none", !data.count);
+      });
+
+      const page = document.querySelector("[data-wishlist-page]");
+      if (page && !data.in_wishlist) {
+        const col = form.closest(".col-6");
+        if (col) col.remove();
+        if (!page.querySelector("[data-wishlist-form]")) {
+          page.querySelector("[data-wishlist-empty]").classList.remove("d-none");
+        }
+      }
+    })
+    .catch(() => form.submit())
+    .finally(() => { button.disabled = false; });
 });

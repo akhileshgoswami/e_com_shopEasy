@@ -4,7 +4,7 @@
 <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-4">
   <div>
     <h1 class="h4 mb-1">Order {{ order.order_number }}</h1>
-    <p class="text-muted small mb-0">Placed {{ order.created_at.strftime('%d %b %Y, %I:%M %p') }}</p>
+    <p class="text-muted small mb-0">Placed {{ order.created_at|ist('%d %b %Y, %I:%M %p IST') }}</p>
   </div>
   <span class="badge bg-secondary status-badge fs-6">{{ order.order_status.replace('_',' ') }}</span>
 </div>
@@ -70,7 +70,7 @@
         <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
           <div>
             <span class="badge bg-{{ 'success' if payment.status == 'paid' else ('danger' if payment.status == 'failed' else 'secondary') }}">{{ payment.status }}</span>
-            <span class="small text-muted ms-1">{{ payment.provider }} &middot; ₹{{ '%.2f'|format(payment.amount) }} &middot; {{ payment.created_at.strftime('%d %b %Y, %I:%M %p') }}</span>
+            <span class="small text-muted ms-1">{{ payment.provider }} &middot; ₹{{ '%.2f'|format(payment.amount) }} &middot; {{ payment.created_at|ist('%d %b %Y, %I:%M %p IST') }}</span>
             {% if payment.status == 'failed' and payment.raw_reference %}
             <p class="small text-danger mb-0 mt-1"><i class="bi bi-exclamation-circle"></i> {{ payment.raw_reference }}</p>
             {% elif payment.status == 'paid' %}
@@ -90,7 +90,7 @@
           {% for h in order.status_history %}
           <li>
             <strong class="status-badge">{{ h.old_status.replace('_',' ') if h.old_status else 'created' }} &rarr; {{ h.new_status.replace('_',' ') }}</strong>
-            <span class="text-muted small"> &mdash; {{ h.created_at.strftime('%d %b %Y, %I:%M %p') }} by {{ h.changed_by }}</span>
+            <span class="text-muted small"> &mdash; {{ h.created_at|ist('%d %b %Y, %I:%M %p IST') }} by {{ h.changed_by }}</span>
             {% if h.note %}<p class="small text-muted mb-0">{{ h.note }}</p>{% endif %}
           </li>
           {% endfor %}
@@ -126,13 +126,32 @@
       <form method="post" action="{{ url_for('admin.order_status_update', order_id=order.id) }}">
         {{ form.hidden_tag() }}
         <div class="mb-2">
-          {{ form.new_status(class="form-select form-select-sm") }}
+          {{ form.new_status(class="form-select form-select-sm", **{"data-status-select": ""}) }}
         </div>
+        {% if 'cancelled' in form.new_status.choices|map('first') %}
+        <div class="mb-2 d-none" data-cancel-reason>
+          <label class="form-label small mb-1" for="cancelReason">Cancellation reason</label>
+          <select name="cancel_reason" id="cancelReason" class="form-select form-select-sm">
+            {% for reason in cancel_reasons %}<option value="{{ reason }}">{{ reason }}</option>{% endfor %}
+          </select>
+        </div>
+        {% endif %}
         <div class="mb-2">
           {{ form.note(class="form-control form-control-sm", placeholder="Note (optional)") }}
         </div>
         <button type="submit" class="btn btn-sm btn-primary w-100">Update status</button>
       </form>
+      <script>
+      // Show the cancellation reasons only when "Cancelled" is picked.
+      (function () {
+        const select = document.querySelector("[data-status-select]");
+        const reason = document.querySelector("[data-cancel-reason]");
+        if (!select || !reason) return;
+        const sync = () => reason.classList.toggle("d-none", select.value !== "cancelled");
+        select.addEventListener("change", sync);
+        sync();
+      })();
+      </script>
       {% else %}
       <p class="text-muted small mb-0">No further status transitions available for this order.</p>
       {% endif %}

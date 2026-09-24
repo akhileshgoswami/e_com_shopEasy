@@ -103,10 +103,12 @@ def _register_blueprints(app):
     from app.checkout import checkout_bp
     from app.payments import payments_bp
     from app.shop import shop_bp
+    from app.wishlist import wishlist_bp
 
     app.register_blueprint(shop_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(cart_bp)
+    app.register_blueprint(wishlist_bp)
     app.register_blueprint(checkout_bp)
     app.register_blueprint(payments_bp)
     app.register_blueprint(admin_bp)
@@ -139,6 +141,7 @@ def _register_context_processors(app):
         from flask_login import current_user
 
         from app.cart.services import CartService
+        from app.wishlist.services import current_wishlist_ids
         from app.services.site_content_service import (
             BRANDING_DEFAULTS,
             BrandingService,
@@ -150,6 +153,7 @@ def _register_context_processors(app):
         from app.shop.services import CategoryService
 
         cart_item_count = 0
+        wishlist_count = 0
         nav_categories = []
         footer_contact = {}
         branding = dict(BRANDING_DEFAULTS)
@@ -159,6 +163,7 @@ def _register_context_processors(app):
             store = StorefrontService.get()
             if current_user.is_authenticated:
                 cart_item_count = CartService.get_item_count(current_user)
+                wishlist_count = len(current_wishlist_ids())
             nav_categories = CategoryService.list_active_categories()
             footer_contact = SiteContentService.get_many(["contact_email", "contact_phone", "contact_address"])
         except Exception:
@@ -169,6 +174,7 @@ def _register_context_processors(app):
         return {
             "nav_categories": nav_categories,
             "cart_item_count": cart_item_count,
+            "wishlist_count": wishlist_count,
             "site_name": branding["site_name"],
             "site_logo_url": branding["logo_url"],
             "show_site_name": not branding["logo_url"] or branding["show_name_with_logo"] == "1",
@@ -270,6 +276,21 @@ def _register_seo_routes(app):
 
 def _register_template_filters(app):
     from markupsafe import Markup, escape
+
+    from app.wishlist.services import current_wishlist_ids
+
+    # A global rather than a context variable so imported macros (product
+    # cards) can ask without being imported "with context".
+    app.jinja_env.globals["in_wishlist"] = lambda product_id: product_id in current_wishlist_ids()
+
+    @app.template_filter("ist")
+    def ist(value, fmt="%d %b %Y, %I:%M %p IST"):
+        """Format a stored UTC datetime in India time; '-' when missing."""
+        from app.utils import to_ist
+
+        if value is None:
+            return "-"
+        return to_ist(value).strftime(fmt)
 
     @app.template_filter("nl2p")
     def nl2p(text):

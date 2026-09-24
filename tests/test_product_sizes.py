@@ -216,7 +216,9 @@ def test_sized_pages_render(client, admin_user, customer, shirt, clothing, addre
     client.post("/checkout/place", data={"address_id": address.id, "payment_method": "cod"})
     order = Order.first(Order.user_id == customer.id)
     assert b"Size: <strong>M</strong>" in client.get(f"/orders/{order.id}").data
-    assert b"Choose size" in client.get("/products").data
+    listing = client.get("/products").data
+    assert b"Choose size" not in listing
+    assert b'<select name="size"' in listing and b"Buy now" in listing
     client.get("/logout")
 
     admin_login(client, admin_user.email)

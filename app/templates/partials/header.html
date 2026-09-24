@@ -37,6 +37,11 @@
           <i class="bi bi-search"></i>
         </button>
 
+        <a href="{{ url_for('wishlist.view_wishlist') }}" class="header-icon-btn text-decoration-none position-relative" aria-label="Wishlist">
+          <i class="bi bi-heart"></i>
+          <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill sky-cart-badge wishlist-badge-count {{ 'd-none' if not wishlist_count }}">{{ wishlist_count }}</span>
+        </a>
+
         <a href="{{ url_for('cart.view_cart') }}" class="header-icon-btn text-decoration-none position-relative" aria-label="Cart">
           <i class="bi bi-cart3"></i>
           <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill sky-cart-badge cart-badge-count {{ 'd-none' if not cart_item_count }}">{{ cart_item_count }}</span>
@@ -51,6 +56,7 @@
             <li><a class="dropdown-item" href="{{ url_for('auth.profile') }}"><i class="bi bi-person"></i> My profile</a></li>
             <li><a class="dropdown-item" href="{{ url_for('auth.addresses') }}"><i class="bi bi-geo-alt"></i> My addresses</a></li>
             <li><a class="dropdown-item" href="{{ url_for('checkout.my_orders') }}"><i class="bi bi-box-seam"></i> My orders</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('wishlist.view_wishlist') }}"><i class="bi bi-heart"></i> My wishlist</a></li>
             {% if current_user.is_admin %}
             <li><a class="dropdown-item" href="{{ url_for('admin.dashboard') }}"><i class="bi bi-speedometer2"></i> Admin panel</a></li>
             {% endif %}
@@ -119,6 +125,7 @@
               {% if current_user.is_authenticated %}
               <li><a href="{{ url_for('auth.profile') }}"><i class="bi bi-person"></i> My profile</a></li>
               <li><a href="{{ url_for('checkout.my_orders') }}"><i class="bi bi-box-seam"></i> My orders</a></li>
+              <li><a href="{{ url_for('wishlist.view_wishlist') }}"><i class="bi bi-heart"></i> My wishlist{% if wishlist_count %} <span class="badge rounded-pill bg-primary wishlist-badge-count">{{ wishlist_count }}</span>{% endif %}</a></li>
               <li><a href="{{ url_for('auth.addresses') }}"><i class="bi bi-geo-alt"></i> My addresses</a></li>
               <li><a href="{{ url_for('cart.view_cart') }}"><i class="bi bi-cart3"></i> Cart{% if cart_item_count %} <span class="badge rounded-pill bg-primary cart-badge-count">{{ cart_item_count }}</span>{% endif %}</a></li>
               {% if current_user.is_admin %}

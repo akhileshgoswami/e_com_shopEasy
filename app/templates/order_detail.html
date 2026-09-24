@@ -10,7 +10,7 @@
   <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-4">
     <div>
       <h1 class="h4 mb-1">Order {{ order.order_number }}</h1>
-      <p class="text-muted small mb-0">Placed on {{ order.created_at.strftime('%d %b %Y, %I:%M %p') }}</p>
+      <p class="text-muted small mb-0">Placed on {{ order.created_at|ist('%d %b %Y, %I:%M %p IST') }}</p>
     </div>
     <span class="badge bg-secondary status-badge fs-6">{{ order.order_status.replace('_',' ') }}</span>
   </div>
@@ -20,12 +20,58 @@
     <span>This order is awaiting payment.</span>
     <div class="d-flex gap-2">
       <a href="{{ url_for('payments.pay', order_id=order.id) }}" class="btn btn-sm btn-primary">Complete payment</a>
-      <form action="{{ url_for('checkout.cancel_pending_order', order_id=order.id) }}" method="post">
+      <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#cancelOrderModal">Cancel order</button>
+    </div>
+  </div>
+  {% elif order.order_status in cancellable_statuses %}
+  <div class="d-flex justify-content-end mb-3">
+    <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#cancelOrderModal"><i class="bi bi-x-circle"></i> Cancel order</button>
+  </div>
+  {% endif %}
+
+  {% if order.order_status in cancellable_statuses %}
+  <div class="modal fade" id="cancelOrderModal" tabindex="-1" aria-labelledby="cancelOrderTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <form class="modal-content" action="{{ url_for('checkout.cancel_order', order_id=order.id) }}" method="post" data-cancel-form>
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-sm btn-outline-danger">Cancel order</button>
+        <div class="modal-header">
+          <h2 class="modal-title h5" id="cancelOrderTitle">Cancel order {{ order.order_number }}?</h2>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p class="small fw-semibold mb-2">Why are you cancelling?</p>
+          {% for reason in cancel_reasons %}
+          <div class="form-check mb-1">
+            <input class="form-check-input" type="radio" name="reason" id="cancelReason{{ loop.index }}" value="{{ reason }}" {{ 'checked' if loop.first }}>
+            <label class="form-check-label" for="cancelReason{{ loop.index }}">{{ reason }}</label>
+          </div>
+          {% endfor %}
+          <label for="cancelReasonDetails" class="form-label small mt-2 mb-1" data-details-label>Anything else? (optional)</label>
+          <textarea class="form-control form-control-sm" id="cancelReasonDetails" name="reason_details" rows="2" maxlength="300" placeholder="Tell us a bit more"></textarea>
+          {% if order.payment_status == 'paid' %}
+          <p class="small text-muted mt-3 mb-0"><i class="bi bi-info-circle"></i> You paid online; the refund goes back to your original payment method.</p>
+          {% endif %}
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Keep order</button>
+          <button type="submit" class="btn btn-danger btn-sm">Cancel order</button>
+        </div>
       </form>
     </div>
   </div>
+  <script>
+  // "Other" needs the customer's own words.
+  (function () {
+    const form = document.querySelector("[data-cancel-form]");
+    const details = form.querySelector("[name=reason_details]");
+    const label = form.querySelector("[data-details-label]");
+    form.addEventListener("change", function () {
+      const other = form.querySelector("[name=reason]:checked").value === {{ other_reason|tojson }};
+      details.required = other;
+      label.textContent = other ? "Please tell us the reason" : "Anything else? (optional)";
+    });
+  })();
+  </script>
   {% endif %}
 
   <div class="row g-4">
@@ -52,7 +98,7 @@
             {% for h in order.status_history %}
             <li>
               <strong class="status-badge">{{ h.new_status.replace('_',' ') }}</strong>
-              <span class="text-muted small"> &mdash; {{ h.created_at.strftime('%d %b %Y, %I:%M %p') }}</span>
+              <span class="text-muted small"> &mdash; {{ h.created_at|ist('%d %b %Y, %I:%M %p IST') }}</span>
               {% if h.note %}<p class="small text-muted mb-0">{{ h.note }}</p>{% endif %}
             </li>
             {% endfor %}

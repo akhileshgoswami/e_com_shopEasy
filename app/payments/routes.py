@@ -135,12 +135,14 @@ def razorpay_payment_failed():
 
     reason = (data.get("reason") or "Payment failed or cancelled by customer.").strip()[:500]
 
+    # Only the attempt is recorded: the order stays pending_payment so the
+    # customer can retry from this page or "Complete payment", or cancel it.
     if order.order_status == OrderStatus.PENDING_PAYMENT:
         payment = Payment.for_order(order.id, "razorpay")
         if payment:
             payment.status = "failed"
             payment.raw_reference = reason
             payment.put()
-        OrderService.mark_payment_failed(order, note=reason)
+        logger.info("Razorpay attempt failed: order_number=%s reason=%s", order.order_number, reason)
 
     return jsonify({"success": True})

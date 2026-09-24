@@ -30,7 +30,7 @@
           <td class="small {{ 'text-danger' if payment.status == 'failed' }}" style="max-width:260px;">
             {% if payment.status == 'failed' and payment.raw_reference %}{{ payment.raw_reference[:120] }}{% else %}-{% endif %}
           </td>
-          <td class="small text-muted">{{ payment.created_at.strftime('%d %b %Y %H:%M') }}</td>
+          <td class="small text-muted">{{ payment.created_at|ist('%d %b %Y %H:%M IST') }}</td>
         </tr>
       {% else %}
         <tr><td colspan="8" class="text-center text-muted py-4">No payments found.</td></tr>

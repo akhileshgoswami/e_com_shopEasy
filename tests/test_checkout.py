@@ -143,3 +143,34 @@ def test_checkout_page_renders_cart_lines(client, customer, product, address):
     resp = client.get("/checkout")
     assert resp.status_code == 200
     assert product.name.encode() in resp.data
+
+
+def test_coupon_controls_do_not_submit_the_place_order_form(client, customer, product, address):
+    # Nested <form>s are dropped by browsers, so the coupon input and buttons
+    # must point at their own forms or "Apply" places the order.
+    login(client, customer.email)
+    client.post("/cart/add", data={"product_id": product.id, "quantity": 1})
+    client.post("/checkout/coupon", data={"coupon_code": "NOPE"})
+    html = client.get("/checkout").get_data(as_text=True)
+
+    checkout_form = html[html.index('id="checkoutForm"'):]
+    checkout_form = checkout_form[: checkout_form.index("</form>")]
+    assert "checkout/coupon" not in checkout_form
+    assert 'name="coupon_code" form="applyCouponForm"' in html
+    assert 'id="applyCouponForm"' in html and 'id="removeCouponForm"' in html
+
+
+def test_invalid_coupon_shows_error_and_blocks_order(client, customer, product, address):
+    login(client, customer.email)
+    client.post("/cart/add", data={"product_id": product.id, "quantity": 1})
+
+    resp = client.post("/checkout/coupon", data={"coupon_code": "NOPE"}, follow_redirects=True)
+    assert b"Invalid coupon code." in resp.data
+
+    resp = client.post("/checkout/place", data={"address_id": address.id, "payment_method": "cod"}, follow_redirects=True)
+    assert b"Invalid coupon code." in resp.data
+    assert Order.first(Order.user_id == customer.id) is None
+
+    client.post("/checkout/coupon/remove")
+    client.post("/checkout/place", data={"address_id": address.id, "payment_method": "cod"})
+    assert Order.first(Order.user_id == customer.id) is not None

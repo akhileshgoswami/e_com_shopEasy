@@ -29,7 +29,7 @@
         <tr>
           <td>{{ order.order_number }}</td>
           <td>{{ order.user.name }}</td>
-          <td>{{ order.created_at.strftime('%d %b %Y') }}</td>
+          <td>{{ order.created_at|ist('%d %b %Y') }}</td>
           <td>₹{{ '%.2f'|format(order.total_amount) }}</td>
           <td class="text-uppercase small">{{ order.payment_method }} &middot; {{ order.payment_status }}</td>
           <td><span class="badge bg-secondary status-badge">{{ order.order_status.replace('_',' ') }}</span></td>

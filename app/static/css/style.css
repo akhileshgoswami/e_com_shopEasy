@@ -575,6 +575,8 @@ section h2.h4 { font-weight: 700; }
 .pd-zoom { position: relative; overflow: hidden; border-radius: var(--radius-lg); }
 .pd-zoom-enabled { cursor: zoom-in; }
 .pd-zoom .main-product-image { display: block; transition: transform 0.15s ease-out; will-change: transform; }
+/* No "save image" callout or text selection during press-and-hold zoom. */
+.pd-zoom-enabled .main-product-image { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 .pd-zoom.is-zoomed .main-product-image { transform: scale(2.2); transition: none; border-color: transparent; }
 .pd-zoom-btn {
   position: absolute; right: 0.75rem; bottom: 0.75rem;
@@ -589,6 +591,12 @@ section h2.h4 { font-weight: 700; }
   background: rgba(255, 255, 255, 0.9); color: var(--muted-ink); transition: opacity 0.15s;
 }
 .pd-zoom.is-zoomed .pd-zoom-hint, .pd-zoom.is-zoomed .pd-zoom-btn { opacity: 0; }
+/* Hint matches the input: hover wording for mice, hold wording for touch. */
+.pd-zoom-hint-touch { display: none; }
+@media (hover: none), (pointer: coarse) {
+  .pd-zoom-hint-mouse { display: none; }
+  .pd-zoom-hint-touch { display: inline; }
+}
 .pd-thumb-btn { border: 0; padding: 0; background: none; }
 
 .pd-lightbox .modal-content { background: #111; color: #fff; border: 0; border-radius: 0; }
@@ -1403,3 +1411,69 @@ nav.admin-sidebar .admin-nav-scroll::-webkit-scrollbar-thumb { background: rgba(
 .card-actions .card-add-btn { flex: 0 0 auto; width: 42px; padding-left: 0; padding-right: 0; font-size: 1.05rem; }
 .storefront .buy-now-btn { background: var(--pop, var(--gold)); border-color: var(--pop, var(--gold)); }
 .storefront .buy-now-btn:hover, .storefront .buy-now-btn:focus { background: var(--pop-dark, var(--gold-dark)); border-color: var(--pop-dark, var(--gold-dark)); }
+
+/* ==========================================================================
+   Home: header blends into the hero. main.js adds .header-overlay to <body>
+   when the page opens on a .sky-hero and keeps --chrome-h (topbar + header
+   height) current, so the hero slides up underneath them. Once the page is
+   scrolled the header fades to a frosted solid bar.
+   ========================================================================== */
+.header-overlay .sky-topbar { position: relative; z-index: 1031; background: transparent; }
+.header-overlay .sky-header { background: transparent; transition: box-shadow 0.3s ease; }
+/* Frosted layer lives on a pseudo-element: backdrop-filter on the header
+   itself would trap the fixed-position mobile drawer inside it. */
+.header-overlay .sky-header::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: color-mix(in srgb, var(--sky-top) 82%, transparent);
+  -webkit-backdrop-filter: saturate(160%) blur(14px);
+  backdrop-filter: saturate(160%) blur(14px);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+.header-overlay .sky-header.is-scrolled::before { opacity: 1; }
+.header-overlay .sky-header.is-scrolled { box-shadow: 0 6px 24px rgba(13, 11, 46, 0.22); }
+.header-overlay main > .sky-hero:first-child {
+  margin-top: calc(-1 * var(--chrome-h, 0px));
+  padding-top: calc(3.5rem + var(--chrome-h, 0px));
+}
+/* Photo heroes: darken the top edge so the white header stays readable. */
+.header-overlay .sky-hero.has-image {
+  background:
+    linear-gradient(180deg, rgba(13, 11, 46, 0.6) 0, rgba(13, 11, 46, 0) calc(var(--chrome-h, 0px) + 3rem)),
+    linear-gradient(90deg, rgba(13, 11, 46, 0.85) 0%, rgba(13, 11, 46, 0.55) 55%, rgba(13, 11, 46, 0.2) 100%),
+    var(--hero-image) center / cover no-repeat;
+}
+@media (prefers-reduced-motion: reduce) {
+  .header-overlay .sky-header,
+  .header-overlay .sky-header::before { transition: none; }
+}
+
+/* Wishlist heart */
+.wishlist-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  color: #5b5b6e;
+  box-shadow: 0 2px 8px rgba(22, 18, 70, 0.12);
+  font-size: 1.05rem;
+  line-height: 1;
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+.wishlist-btn:hover { color: var(--pop, #e2434a); transform: scale(1.08); }
+.wishlist-btn.is-active { color: var(--pop, #e2434a); }
+.wishlist-btn:disabled { opacity: 0.6; }
+.wishlist-form { margin: 0; }
+.wishlist-form-card { position: absolute; top: 0.5rem; right: 0.5rem; z-index: 2; }
+.wishlist-form-detail .wishlist-btn { width: 42px; height: 42px; font-size: 1.2rem; flex: 0 0 auto; }
+@media (prefers-reduced-motion: reduce) {
+  .wishlist-btn { transition: none; }
+}

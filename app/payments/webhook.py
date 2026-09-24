@@ -93,5 +93,6 @@ def _process_event(event_type, payload):
             payment.status = "failed"
             payment.raw_reference = reason
             payment.put()
-        OrderService.mark_payment_failed(order, note=reason)
-        logger.info("Webhook confirmed payment failure: order_number=%s", order.order_number)
+        # A Razorpay order allows several attempts; one failed attempt leaves
+        # ours pending_payment so the customer can still retry or cancel.
+        logger.info("Webhook reported failed attempt: order_number=%s reason=%s", order.order_number, reason)

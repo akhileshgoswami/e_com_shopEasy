@@ -5,6 +5,7 @@ from app.models.category import Category, Subcategory
 from app.models.product import Product, ProductImage, ProductSize
 from app.models.product_type import ProductType
 from app.models.cart import Cart, CartItem
+from app.models.wishlist import Wishlist
 from app.models.order import Order, OrderItem, OrderStatusHistory, OrderStatus, PaymentMethod, PaymentStatus
 from app.models.payment import Payment, WebhookEvent, PaymentProvider
 from app.models.coupon import Coupon, DiscountType
@@ -23,6 +24,7 @@ __all__ = [
     "ProductType",
     "Cart",
     "CartItem",
+    "Wishlist",
     "Order",
     "OrderItem",
     "OrderStatusHistory",

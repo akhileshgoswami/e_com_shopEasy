@@ -522,7 +522,9 @@ def order_detail(order_id):
     form = OrderStatusForm()
     allowed = OrderStatus.TRANSITIONS.get(order.order_status, ())
     form.new_status.choices = [(s, s.replace("_", " ").title()) for s in allowed]
-    return render_template("admin/order_detail.html", order=order, form=form)
+    return render_template(
+        "admin/order_detail.html", order=order, form=form, cancel_reasons=OrderStatus.ADMIN_CANCEL_REASONS
+    )
 
 
 @admin_bp.route("/orders/<int:order_id>/status", methods=["POST"])
@@ -536,8 +538,18 @@ def order_status_update(order_id):
     form.new_status.choices = [(s, s.replace("_", " ").title()) for s in allowed]
 
     if form.validate_on_submit():
+        note = (form.note.data or "").strip()
+        if form.new_status.data == OrderStatus.CANCELLED:
+            reason = request.form.get("cancel_reason", "").strip()
+            if reason not in OrderStatus.ADMIN_CANCEL_REASONS:
+                reason = OrderStatus.ADMIN_CANCEL_REASONS[0]
+            if reason == OrderStatus.OTHER_REASON and not note:
+                flash("Please add a note explaining the cancellation.", "danger")
+                return redirect(url_for("admin.order_detail", order_id=order.id))
+            if reason != OrderStatus.OTHER_REASON:
+                note = f"{reason}: {note}" if note else reason
         try:
-            OrderService.change_status(order, form.new_status.data, changed_by=current_user.email, note=form.note.data)
+            OrderService.change_status(order, form.new_status.data, changed_by=current_user.email, note=note or None)
             flash("Order status updated.", "success")
         except OrderTransitionError as exc:
             flash(str(exc), "danger")

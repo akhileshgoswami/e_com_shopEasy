@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% import "partials/product_card.html" as pc %}
+{% import "partials/wishlist_button.html" as wl %}
 
 {% block title %}{{ product.name }} - {{ site_name }}{% endblock %}
 {% block meta_description %}{{ product.short_description or product.name }}{% endblock %}
@@ -45,7 +46,8 @@
           <img id="mainProductImage" src="{{ product.image_url or url_for('static', filename='images/placeholder.svg') }}" class="main-product-image" alt="{{ product.name }}" data-zoom-image>
           {% if gallery %}
           <button type="button" class="pd-zoom-btn" data-zoom-open aria-label="View image full screen" title="View full screen"><i class="bi bi-arrows-fullscreen"></i></button>
-          <span class="pd-zoom-hint d-none d-md-inline"><i class="bi bi-zoom-in"></i> Hover to zoom, click to enlarge</span>
+          <span class="pd-zoom-hint pd-zoom-hint-mouse"><i class="bi bi-zoom-in"></i> Hover to zoom, click to enlarge</span>
+          <span class="pd-zoom-hint pd-zoom-hint-touch"><i class="bi bi-hand-index"></i> Hold to zoom, tap to enlarge</span>
           {% endif %}
         </div>
         {% if gallery|length > 1 %}
@@ -84,7 +86,10 @@
     </div>
 
     <div class="col-md-6">
-      <h1 class="h3">{{ product.name }}</h1>
+      <div class="d-flex align-items-start justify-content-between gap-3">
+        <h1 class="h3">{{ product.name }}</h1>
+        {{ wl.wishlist_button(product, "wishlist-form-detail") }}
+      </div>
       <p class="text-muted small mb-2">SKU: {{ product.sku }}</p>
 
       <div class="d-flex align-items-center gap-2 mb-3">
@@ -111,12 +116,13 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="product_id" value="{{ product.id }}">
         {% if product.has_sizes %}
-        {% set single_size = product.sizes|length == 1 %}
+        {# Pre-select the first size that's in stock so shoppers can add straight away. #}
+        {% set default_size = (product.sizes|selectattr('in_stock')|first or {}).name %}
         <fieldset class="size-picker mb-3" data-size-picker data-low-threshold="{{ product.low_stock_threshold }}">
           <legend class="fs-6 fw-semibold mb-2">Select {{ product.display_size_label|lower }}</legend>
           <div class="d-flex flex-wrap gap-2">
             {% for size in product.sizes %}
-            <input type="radio" class="btn-check" name="size" id="size-{{ loop.index }}" value="{{ size.name }}" data-stock="{{ size.stock_quantity }}" autocomplete="off" required {{ 'disabled' if not size.in_stock }} {{ 'checked' if single_size and size.in_stock }}>
+            <input type="radio" class="btn-check" name="size" id="size-{{ loop.index }}" value="{{ size.name }}" data-stock="{{ size.stock_quantity }}" autocomplete="off" required {{ 'disabled' if not size.in_stock }} {{ 'checked' if size.in_stock and size.name == default_size }}>
             <label class="btn btn-outline-secondary size-option {{ 'size-sold-out' if not size.in_stock }}" for="size-{{ loop.index }}" {% if not size.in_stock %}title="Sold out"{% endif %}>{{ size.name }}</label>
             {% endfor %}
           </div>
