@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from google.cloud import ndb
 
-from app.cart.services import CartService
+from app.cart.services import CartError, CartService
 from app.models import (
     CartItem,
     Coupon,
@@ -49,14 +49,22 @@ def _buy_now_line(user, buy_now):
     product = Product.find(buy_now.get("product_id"))
     if product is None or not product.is_active:
         return [], ["This product is no longer available."]
-    if product.stock_quantity <= 0:
-        return [], [f"'{product.name}' is out of stock."]
+    try:
+        size = CartService.resolve_size(product, buy_now.get("size"))
+    except CartError as exc:
+        return [], [str(exc)]
+    label = CartService.line_label(product, size)
+    available = product.stock_for(size)
+    if available <= 0:
+        return [], [f"{label} is out of stock."]
     quantity = max(1, int(buy_now.get("quantity") or 1))
     messages = []
-    if quantity > product.stock_quantity:
-        messages.append(f"Quantity for '{product.name}' was reduced to {product.stock_quantity} (limited stock).")
-        quantity = product.stock_quantity
-    line = CartItem(cart_id=user.id, product_id=product.id, quantity=quantity, unit_price=product.effective_price)
+    if quantity > available:
+        messages.append(f"Quantity for {label} was reduced to {available} (limited stock).")
+        quantity = available
+    line = CartItem(
+        cart_id=user.id, product_id=product.id, size=size, quantity=quantity, unit_price=product.effective_price
+    )
     return [line], messages
 
 
@@ -140,7 +148,11 @@ class CheckoutService:
             # Re-read stock (and the coupon) inside the transaction: if a
             # concurrent checkout touched the same product, Datastore aborts
             # one commit and this runs again on fresh values.
-            products = ndb.get_multi([ndb.Key(Product, item.product_id) for item in cart_items])
+            # One entity per product: two sizes of the same product are two
+            # lines, and both must decrement the same entity before it's put.
+            product_ids = list(dict.fromkeys(item.product_id for item in cart_items))
+            fetched = ndb.get_multi([ndb.Key(Product, pid) for pid in product_ids])
+            products_by_id = dict(zip(product_ids, fetched))
             order = Order(
                 key=order_key,
                 user_id=user.id,
@@ -169,22 +181,28 @@ class CheckoutService:
             )
             to_put = [order]
 
-            for item, product in zip(cart_items, products):
+            for item in cart_items:
+                product = products_by_id.get(item.product_id)
                 if product is None or not product.is_active:
                     raise CheckoutError("An item in your cart is no longer available.")
-                InventoryService.take_stock(product, item.quantity)
-                to_put.append(product)
+                if product.has_sizes and product.get_size(item.size) is None:
+                    raise CheckoutError(f"The selected size of '{product.name}' is no longer available.")
+                size = item.size if product.has_sizes else None
+                InventoryService.take_stock(product, item.quantity, size)
                 to_put.append(
                     OrderItem(
                         order_id=order.id,
                         product_id=product.id,
                         product_name=product.name,
                         sku=product.sku,
+                        size=size,
                         quantity=item.quantity,
                         unit_price=item.unit_price,
                         subtotal=item.unit_price * item.quantity,
                     )
                 )
+
+            to_put.extend(p for p in products_by_id.values() if p is not None)
 
             to_put.append(
                 Payment(

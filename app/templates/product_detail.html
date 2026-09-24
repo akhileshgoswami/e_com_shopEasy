@@ -38,13 +38,47 @@
 
   <div class="row g-4">
     <div class="col-md-6">
-      {% set gallery = product.images if product.images else [] %}
-      <img id="mainProductImage" src="{{ product.image_url or url_for('static', filename='images/placeholder.svg') }}" class="main-product-image mb-2" alt="{{ product.name }}">
-      {% if gallery|length > 1 %}
-      <div class="d-flex gap-2 flex-wrap">
-        {% for img in gallery %}
-        <img src="{{ img.image_url }}" class="product-gallery-thumb {{ 'active' if img.image_url == product.image_url }}" onclick="document.getElementById('mainProductImage').src=this.src" alt="{{ product.name }} thumbnail">
-        {% endfor %}
+      {% set gallery = product.images|map(attribute='image_url')|list %}
+      {% if product.image_url and product.image_url not in gallery %}{% set gallery = [product.image_url] + gallery %}{% endif %}
+      <div class="product-gallery" data-gallery data-images='{{ gallery|tojson }}'>
+        <div class="pd-zoom mb-2 {{ 'pd-zoom-enabled' if gallery }}" data-zoom-stage>
+          <img id="mainProductImage" src="{{ product.image_url or url_for('static', filename='images/placeholder.svg') }}" class="main-product-image" alt="{{ product.name }}" data-zoom-image>
+          {% if gallery %}
+          <button type="button" class="pd-zoom-btn" data-zoom-open aria-label="View image full screen" title="View full screen"><i class="bi bi-arrows-fullscreen"></i></button>
+          <span class="pd-zoom-hint d-none d-md-inline"><i class="bi bi-zoom-in"></i> Hover to zoom, click to enlarge</span>
+          {% endif %}
+        </div>
+        {% if gallery|length > 1 %}
+        <div class="d-flex gap-2 flex-wrap">
+          {% for url in gallery %}
+          <button type="button" class="pd-thumb-btn" data-thumb="{{ loop.index0 }}" aria-label="Show image {{ loop.index }}">
+            <img src="{{ url }}" class="product-gallery-thumb {{ 'active' if url == product.image_url }}" alt="{{ product.name }} thumbnail {{ loop.index }}">
+          </button>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+
+      {% if gallery %}
+      <div class="modal fade pd-lightbox" id="imageLightbox" tabindex="-1" aria-label="{{ product.name }} images" aria-hidden="true">
+        <div class="modal-dialog modal-fullscreen">
+          <div class="modal-content">
+            <div class="pd-lightbox-bar">
+              <span class="small" data-lightbox-count></span>
+              <div class="d-flex gap-2">
+                <button type="button" class="pd-lightbox-icon" data-lightbox-zoom aria-label="Zoom in or out" title="Zoom"><i class="bi bi-zoom-in"></i></button>
+                <button type="button" class="pd-lightbox-icon" data-bs-dismiss="modal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+              </div>
+            </div>
+            <div class="pd-lightbox-stage" data-lightbox-stage>
+              <img src="" alt="{{ product.name }}" data-lightbox-image draggable="false">
+            </div>
+            {% if gallery|length > 1 %}
+            <button type="button" class="pd-lightbox-nav prev" data-lightbox-prev aria-label="Previous image"><i class="bi bi-chevron-left"></i></button>
+            <button type="button" class="pd-lightbox-nav next" data-lightbox-next aria-label="Next image"><i class="bi bi-chevron-right"></i></button>
+            {% endif %}
+          </div>
+        </div>
       </div>
       {% endif %}
     </div>
@@ -76,6 +110,19 @@
       <form action="{{ url_for('cart.add_to_cart') }}" method="post" class="add-to-cart-form mb-3">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="product_id" value="{{ product.id }}">
+        {% if product.has_sizes %}
+        {% set single_size = product.sizes|length == 1 %}
+        <fieldset class="size-picker mb-3" data-size-picker data-low-threshold="{{ product.low_stock_threshold }}">
+          <legend class="fs-6 fw-semibold mb-2">Select {{ product.display_size_label|lower }}</legend>
+          <div class="d-flex flex-wrap gap-2">
+            {% for size in product.sizes %}
+            <input type="radio" class="btn-check" name="size" id="size-{{ loop.index }}" value="{{ size.name }}" data-stock="{{ size.stock_quantity }}" autocomplete="off" required {{ 'disabled' if not size.in_stock }} {{ 'checked' if single_size and size.in_stock }}>
+            <label class="btn btn-outline-secondary size-option {{ 'size-sold-out' if not size.in_stock }}" for="size-{{ loop.index }}" {% if not size.in_stock %}title="Sold out"{% endif %}>{{ size.name }}</label>
+            {% endfor %}
+          </div>
+          <p class="small mt-2 mb-0" data-size-status></p>
+        </fieldset>
+        {% endif %}
         <div class="d-flex align-items-center gap-3">
           <div class="input-group qty-stepper" style="max-width: 140px;">
             <button class="btn btn-outline-secondary" type="button" aria-label="Decrease quantity" onclick="const i=this.nextElementSibling; i.stepDown();">-</button>

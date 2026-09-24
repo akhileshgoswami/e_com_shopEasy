@@ -15,14 +15,36 @@
         </div>
         {{ f.render_field(form.name) }}
         {{ f.render_field(form.sku) }}
+        {{ f.render_field(form.product_type_id, extra_class="js-product-type") }}
         {{ f.render_field(form.short_description) }}
         {{ f.render_field(form.description) }}
         <div class="row">
           <div class="col-md-6">{{ f.render_field(form.price) }}</div>
           <div class="col-md-6">{{ f.render_field(form.sale_price) }}</div>
         </div>
+        <div class="card bg-body-tertiary border mb-3" data-size-editor>
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+              <h2 class="h6 mb-0"><span data-size-label>Size</span>s &amp; stock</h2>
+              <div class="d-flex align-items-center gap-2" data-size-bulk>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-size-all>Select all</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-size-none>Clear</button>
+                <span class="small text-muted">Total: <strong data-size-total>0</strong></span>
+              </div>
+            </div>
+            <p class="small text-muted mb-2" data-size-help>Tick every size this product is sold in and enter stock for each. Sizes with 0 stock show as sold out.</p>
+            <p class="small text-muted mb-2 d-none" data-size-empty>Not sold by size. Pick a product type above, or add sizes below just for this product.</p>
+            <div class="row g-2 mb-2" data-size-rows></div>
+            <div class="input-group input-group-sm" style="max-width: 420px;">
+              <input type="text" class="form-control" maxlength="200" placeholder="Add sizes, e.g. XXL, 3XL or UK 12" aria-label="Add sizes" data-size-new>
+              <button type="button" class="btn btn-outline-primary" data-size-add><i class="bi bi-plus"></i> Add</button>
+            </div>
+            <div data-size-custom-inputs></div>
+          </div>
+        </div>
+        <script type="application/json" id="size-editor-data">{{ size_editor|tojson }}</script>
         <div class="row">
-          <div class="col-md-6">{{ f.render_field(form.stock_quantity) }}</div>
+          <div class="col-md-6" data-single-stock>{{ f.render_field(form.stock_quantity) }}</div>
           <div class="col-md-6">{{ f.render_field(form.low_stock_threshold) }}</div>
         </div>
         {{ f.render_field(form.is_active) }}
@@ -51,14 +73,14 @@
               {% if image.image_url != product.image_url %}
               <form action="{{ url_for('admin.product_image_set_main', product_id=product.id, image_id=image.id) }}" method="post">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="btn btn-xs btn-outline-primary" style="font-size:0.7rem;">Set main</button>
+                <button type="submit" class="btn btn-sm btn-outline-primary px-2 py-0" title="Set as main image" aria-label="Set as main image"><i class="bi bi-star"></i></button>
               </form>
               {% else %}
-              <span class="badge bg-primary" style="font-size:0.65rem;">Main</span>
+              <span class="badge bg-primary align-self-center" style="font-size:0.65rem;">Main</span>
               {% endif %}
               <form action="{{ url_for('admin.product_image_delete', product_id=product.id, image_id=image.id) }}" method="post" data-confirm="Delete this image?">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="btn btn-xs btn-outline-danger" style="font-size:0.7rem;">Delete</button>
+                <button type="submit" class="btn btn-sm btn-outline-danger px-2 py-0" title="Delete image" aria-label="Delete image"><i class="bi bi-trash"></i></button>
               </form>
             </div>
           </div>

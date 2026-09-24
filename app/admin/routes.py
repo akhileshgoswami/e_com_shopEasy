@@ -15,6 +15,7 @@ from app.admin.forms import (
     PaymentSettingsForm,
     ProductForm,
     ProductImageForm,
+    ProductTypeForm,
     SiteContentForm,
     StorefrontForm,
     StockUpdateForm,
@@ -26,12 +27,24 @@ from app.admin.services import (
     AdminCouponService,
     AdminError,
     AdminProductService,
+    AdminProductTypeService,
     AdminUserService,
     DashboardService,
 )
 from app.auth.services import AuthError, AuthenticationService
 from app.extensions import limiter
-from app.models import Category, Coupon, Order, OrderStatus, Payment, Product, ProductImage, Subcategory, User
+from app.models import (
+    Category,
+    Coupon,
+    Order,
+    OrderStatus,
+    Payment,
+    Product,
+    ProductImage,
+    ProductType,
+    Subcategory,
+    User,
+)
 from app.storage import UnsupportedFileError
 from app.utils import Pagination, contains_text, newest_first
 
@@ -207,6 +220,67 @@ def subcategory_delete(subcategory_id):
     return redirect(url_for("admin.subcategories"))
 
 
+# ---------- Product types ----------
+
+@admin_bp.route("/product-types")
+@admin_required
+def product_types():
+    types = sorted(ProductType.all(), key=lambda t: (t.sort_order, t.name.lower()))
+    counts = {}
+    for product in Product.all():
+        if product.product_type_id:
+            counts[product.product_type_id] = counts.get(product.product_type_id, 0) + 1
+    return render_template("admin/product_types_list.html", product_types=types, product_counts=counts)
+
+
+@admin_bp.route("/product-types/new", methods=["GET", "POST"])
+@admin_required
+def product_type_new():
+    form = ProductTypeForm()
+    if form.validate_on_submit():
+        try:
+            AdminProductTypeService.create(form)
+            flash("Product type created.", "success")
+            return redirect(url_for("admin.product_types"))
+        except AdminError as exc:
+            flash(str(exc), "danger")
+    return render_template("admin/product_type_form.html", form=form, is_new=True)
+
+
+@admin_bp.route("/product-types/<int:type_id>/edit", methods=["GET", "POST"])
+@admin_required
+def product_type_edit(type_id):
+    product_type = ProductType.find_or_404(type_id)
+    form = ProductTypeForm(obj=product_type)
+    if request.method == "GET":
+        form.sizes.data = "\n".join(product_type.sizes)
+    if form.validate_on_submit():
+        try:
+            AdminProductTypeService.update(product_type, form)
+            flash("Product type updated. Re-save a product to pick up new or removed sizes.", "success")
+            return redirect(url_for("admin.product_types"))
+        except AdminError as exc:
+            flash(str(exc), "danger")
+    return render_template("admin/product_type_form.html", form=form, is_new=False, product_type=product_type)
+
+
+@admin_bp.route("/product-types/<int:type_id>/delete", methods=["POST"])
+@admin_required
+def product_type_delete(type_id):
+    product_type = ProductType.find_or_404(type_id)
+    AdminProductTypeService.deactivate(product_type)
+    flash("Product type deactivated. Existing products keep their sizes.", "info")
+    return redirect(url_for("admin.product_types"))
+
+
+@admin_bp.route("/product-types/defaults", methods=["POST"])
+@admin_required
+def product_type_defaults():
+    created = AdminProductTypeService.create_defaults()
+    flash(f"Added {len(created)} common product type(s)." if created else "Common product types already exist.", "success")
+    return redirect(url_for("admin.product_types"))
+
+
 # ---------- Products ----------
 
 @admin_bp.route("/products")
@@ -231,28 +305,62 @@ def products():
     return render_template("admin/products_list.html", pagination=pagination, products=pagination.items, q=q, status=status)
 
 
-def _populate_product_choices(form):
+def _populate_product_choices(form, product=None):
     categories = _by_name(Category.all())
     names = {c.id: c.name for c in categories}
     form.category_id.choices = [(c.id, c.name) for c in categories]
     form.subcategory_id.choices = [(0, "-- none --")] + [
         (s.id, f"{names.get(s.category_id, '?')} / {s.name}") for s in _by_name(Subcategory.all())
     ]
+    # Inactive types stay selectable for the product that already uses one.
+    types = [
+        t
+        for t in sorted(ProductType.all(), key=lambda t: (t.sort_order, t.name.lower()))
+        if t.is_active or (product is not None and t.id == product.product_type_id)
+    ]
+    form.product_type_id.choices = [(0, "-- not sold by size --")] + [(t.id, t.name) for t in types]
+    return types
+
+
+def _product_form_context(product_types, product=None):
+    """Data the size editor on the product form needs: each type's sizes,
+    and the stock this product has (or the admin just submitted) per size."""
+    if request.method == "POST":
+        size_stock = {name: request.form.get(f"size_stock__{name}", "0") for name in request.form.getlist("size_on")}
+    elif product is not None:
+        size_stock = {s.name: s.stock_quantity for s in product.sizes}
+    else:
+        size_stock = {}
+    return {
+        "size_editor": {
+            "types": {
+                str(t.id): {"label": t.size_label or "Size", "sizes": list(t.sizes)} for t in product_types
+            },
+            "stock": size_stock,
+            # Offered too (see AdminProductService.size_options), even if
+            # the chosen type no longer lists them; custom = sizes added by
+            # hand on a form that was rejected and is being shown again.
+            "current": product.size_names if product else [],
+            "custom": request.form.getlist("size_custom") if request.method == "POST" else [],
+        }
+    }
 
 
 @admin_bp.route("/products/new", methods=["GET", "POST"])
 @admin_required
 def product_new():
     form = ProductForm()
-    _populate_product_choices(form)
+    product_types = _populate_product_choices(form)
     if form.validate_on_submit():
         try:
-            product = AdminProductService.create_product(form)
+            product = AdminProductService.create_product(form, request.form)
             flash("Product created. You can now upload images.", "success")
             return redirect(url_for("admin.product_edit", product_id=product.id))
         except AdminError as exc:
             flash(str(exc), "danger")
-    return render_template("admin/product_form.html", form=form, is_new=True)
+    return render_template(
+        "admin/product_form.html", form=form, is_new=True, **_product_form_context(product_types)
+    )
 
 
 @admin_bp.route("/products/<int:product_id>/edit", methods=["GET", "POST"])
@@ -260,20 +368,28 @@ def product_new():
 def product_edit(product_id):
     product = Product.find_or_404(product_id)
     form = ProductForm(obj=product)
-    _populate_product_choices(form)
+    product_types = _populate_product_choices(form, product)
     if request.method == "GET":
         form.subcategory_id.data = product.subcategory_id or 0
+        form.product_type_id.data = product.product_type_id or 0
 
     if form.validate_on_submit():
         try:
-            AdminProductService.update_product(product, form)
+            AdminProductService.update_product(product, form, request.form)
             flash("Product updated.", "success")
             return redirect(url_for("admin.product_edit", product_id=product.id))
         except AdminError as exc:
             flash(str(exc), "danger")
 
     image_form = ProductImageForm()
-    return render_template("admin/product_form.html", form=form, is_new=False, product=product, image_form=image_form)
+    return render_template(
+        "admin/product_form.html",
+        form=form,
+        is_new=False,
+        product=product,
+        image_form=image_form,
+        **_product_form_context(product_types, product),
+    )
 
 
 @admin_bp.route("/products/<int:product_id>/toggle-active", methods=["POST"])
@@ -350,8 +466,13 @@ def inventory_update(product_id):
     product = Product.find_or_404(product_id)
     form = StockUpdateForm()
     if form.validate_on_submit():
-        AdminProductService.update_stock(product, form.stock_quantity.data, form.low_stock_threshold.data)
-        flash("Stock updated.", "success")
+        try:
+            AdminProductService.update_stock(
+                product, form.stock_quantity.data, form.low_stock_threshold.data, request.form
+            )
+            flash("Stock updated.", "success")
+        except AdminError as exc:
+            flash(str(exc), "danger")
     else:
         flash("Invalid stock values.", "danger")
     return redirect(url_for("admin.inventory"))

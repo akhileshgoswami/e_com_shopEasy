@@ -25,29 +25,58 @@ class CartService:
             raise CartError("Cart item not found.")
         return item
 
+    @staticmethod
+    def resolve_size(product, size):
+        """The size a cart line should carry: must be one of the product's
+        sizes for sized products, and is dropped for everything else."""
+        if not product.has_sizes:
+            return None
+        size = (size or "").strip()
+        if not size:
+            raise CartError(f"Please select a {product.display_size_label.lower()} for '{product.name}'.")
+        if product.get_size(size) is None:
+            raise CartError(f"{product.display_size_label} '{size}' is not available for '{product.name}'.")
+        return size
+
+    @staticmethod
+    def line_label(product, size):
+        return f"'{product.name}' ({product.display_size_label}: {size})" if size else f"'{product.name}'"
+
+    @staticmethod
+    def find_line(cart_id, product_id, size=None):
+        # size isn't indexed; a cart holds few lines per product anyway.
+        for item in CartItem.all(CartItem.cart_id == cart_id, CartItem.product_id == product_id):
+            if (item.size or None) == (size or None):
+                return item
+        return None
+
     @classmethod
-    def add_item(cls, user, product_id, quantity=1):
+    def add_item(cls, user, product_id, quantity=1, size=None):
         if quantity < 1:
             raise CartError("Quantity must be at least 1.")
 
         product = Product.find(product_id)
         if product is None or not product.is_active:
             raise CartError("This product is no longer available.")
+        size = cls.resolve_size(product, size)
 
         cart = cls.get_or_create_cart(user)
-        item = CartItem.first(CartItem.cart_id == cart.id, CartItem.product_id == product.id)
+        item = cls.find_line(cart.id, product.id, size)
         desired_qty = quantity + (item.quantity if item else 0)
 
-        if desired_qty > product.stock_quantity:
-            raise CartError(
-                f"Only {product.stock_quantity} unit(s) of '{product.name}' available."
-            )
+        available = product.stock_for(size)
+        if desired_qty > available:
+            if available <= 0:
+                raise CartError(f"{cls.line_label(product, size)} is out of stock.")
+            raise CartError(f"Only {available} unit(s) of {cls.line_label(product, size)} available.")
 
         if item:
             item.quantity = desired_qty
             item.unit_price = product.effective_price
         else:
-            item = CartItem(cart_id=cart.id, product_id=product.id, quantity=desired_qty, unit_price=product.effective_price)
+            item = CartItem(
+                cart_id=cart.id, product_id=product.id, size=size, quantity=desired_qty, unit_price=product.effective_price
+            )
 
         item.put()
         return item
@@ -62,8 +91,9 @@ class CartService:
             return None
 
         product = item.product
-        if quantity > product.stock_quantity:
-            raise CartError(f"Only {product.stock_quantity} unit(s) of '{product.name}' available.")
+        available = product.stock_for(item.size)
+        if quantity > available:
+            raise CartError(f"Only {available} unit(s) of {cls.line_label(product, item.size)} available.")
 
         item.quantity = quantity
         item.unit_price = product.effective_price
@@ -92,20 +122,31 @@ class CartService:
                 continue
 
             changed = False
+            if product.has_sizes and product.get_size(item.size) is None:
+                messages.append(
+                    f"{product.display_size_label} '{item.size or '-'}' of '{product.name}' is no longer available "
+                    "and was removed from your cart."
+                )
+                to_delete.append(item.key)
+                continue
+            if not product.has_sizes and item.size:
+                item.size = None
+                changed = True
+
             if item.unit_price != product.effective_price:
                 messages.append(f"Price for '{product.name}' has been updated.")
                 item.unit_price = product.effective_price
                 changed = True
 
-            if item.quantity > product.stock_quantity:
-                if product.stock_quantity <= 0:
-                    messages.append(f"'{product.name}' is out of stock and was removed from your cart.")
+            available = product.stock_for(item.size)
+            label = CartService.line_label(product, item.size)
+            if item.quantity > available:
+                if available <= 0:
+                    messages.append(f"{label} is out of stock and was removed from your cart.")
                     to_delete.append(item.key)
                     continue
-                messages.append(
-                    f"Quantity for '{product.name}' was reduced to {product.stock_quantity} (limited stock)."
-                )
-                item.quantity = product.stock_quantity
+                messages.append(f"Quantity for {label} was reduced to {available} (limited stock).")
+                item.quantity = available
                 changed = True
 
             if changed:

@@ -13,7 +13,7 @@
 <div class="card">
   <div class="table-responsive">
     <table class="table align-middle mb-0">
-      <thead><tr><th>Product</th><th>SKU</th><th>Stock</th><th>Low stock threshold</th><th style="width:260px;">Update</th></tr></thead>
+      <thead><tr><th>Product</th><th>SKU</th><th>Stock</th><th>Low stock threshold</th><th style="min-width:260px;">Update</th></tr></thead>
       <tbody>
       {% for product in products %}
         <tr>
@@ -23,13 +23,28 @@
             {% if product.stock_quantity == 0 %}<span class="badge bg-danger">0</span>
             {% elif product.is_low_stock %}<span class="badge bg-warning text-dark">{{ product.stock_quantity }}</span>
             {% else %}{{ product.stock_quantity }}{% endif %}
+            {% if product.has_sizes %}
+            <div class="small text-muted">
+              {% for size in product.sizes %}<span class="me-2 {{ 'text-danger' if not size.in_stock }}">{{ size.name }}: {{ size.stock_quantity }}</span>{% endfor %}
+            </div>
+            {% endif %}
           </td>
           <td>{{ product.low_stock_threshold }}</td>
           <td>
-            <form action="{{ url_for('admin.inventory_update', product_id=product.id) }}" method="post" class="d-flex gap-2 align-items-center">
+            <form action="{{ url_for('admin.inventory_update', product_id=product.id) }}" method="post" class="d-flex gap-2 align-items-end flex-wrap">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <input type="number" name="stock_quantity" value="{{ product.stock_quantity }}" min="0" class="form-control form-control-sm" style="width:90px;">
-              <input type="number" name="low_stock_threshold" value="{{ product.low_stock_threshold }}" min="0" class="form-control form-control-sm" style="width:90px;">
+              {% if product.has_sizes %}
+                {% for size in product.sizes %}
+                <label class="small text-muted mb-0">{{ size.name }}
+                  <input type="number" name="size_stock__{{ size.name }}" value="{{ size.stock_quantity }}" min="0" class="form-control form-control-sm" style="width:70px;">
+                </label>
+                {% endfor %}
+              {% else %}
+              <input type="number" name="stock_quantity" value="{{ product.stock_quantity }}" min="0" class="form-control form-control-sm" style="width:90px;" aria-label="Stock">
+              {% endif %}
+              <label class="small text-muted mb-0">Low at
+                <input type="number" name="low_stock_threshold" value="{{ product.low_stock_threshold }}" min="0" class="form-control form-control-sm" style="width:70px;">
+              </label>
               <button type="submit" class="btn btn-sm btn-primary">Save</button>
             </form>
           </td>

@@ -31,10 +31,14 @@ def _apply_pending_cart_action():
     if not pending:
         return None
     if pending.get("buy_now"):
-        session[BUY_NOW_SESSION_KEY] = {"product_id": pending["product_id"], "quantity": pending.get("quantity", 1)}
+        session[BUY_NOW_SESSION_KEY] = {
+            "product_id": pending["product_id"],
+            "quantity": pending.get("quantity", 1),
+            "size": pending.get("size"),
+        }
         return url_for("checkout.checkout")
     try:
-        CartService.add_item(current_user, pending["product_id"], pending.get("quantity", 1))
+        CartService.add_item(current_user, pending["product_id"], pending.get("quantity", 1), size=pending.get("size"))
         flash("Item added to your cart.", "success")
         return url_for("cart.view_cart")
     except CartError as exc:

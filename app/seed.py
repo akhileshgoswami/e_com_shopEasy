@@ -1,6 +1,7 @@
 from decimal import Decimal
 
-from app.models import Category, Product, Subcategory
+from app.admin.services import AdminProductTypeService
+from app.models import Category, Product, ProductSize, ProductType, Subcategory
 from app.shop.services import CategoryService, ProductService
 
 SEED_CATALOG = {
@@ -21,12 +22,12 @@ SEED_CATALOG = {
         "description": "Clothing and accessories for everyone.",
         "subcategories": {
             "Men": [
-                {"name": "Classic Fit Cotton Shirt", "price": 1299, "sale_price": 899, "stock": 100, "desc": "Breathable 100% cotton shirt, available in multiple colors."},
-                {"name": "Slim Fit Denim Jeans", "price": 1999, "sale_price": None, "stock": 80, "desc": "Comfort-stretch denim jeans with a modern slim fit."},
+                {"name": "Classic Fit Cotton Shirt", "price": 1299, "sale_price": 899, "stock": 100, "type": "Clothing", "desc": "Breathable 100% cotton shirt, available in multiple colors."},
+                {"name": "Slim Fit Denim Jeans", "price": 1999, "sale_price": None, "stock": 80, "type": "Bottomwear", "desc": "Comfort-stretch denim jeans with a modern slim fit."},
             ],
             "Women": [
-                {"name": "Floral Summer Dress", "price": 1799, "sale_price": 1399, "stock": 50, "desc": "Lightweight floral print dress, perfect for summer."},
-                {"name": "Everyday Kurti Set", "price": 1499, "sale_price": None, "stock": 70, "desc": "Comfortable cotton kurti with matching bottoms."},
+                {"name": "Floral Summer Dress", "price": 1799, "sale_price": 1399, "stock": 50, "type": "Clothing", "desc": "Lightweight floral print dress, perfect for summer."},
+                {"name": "Everyday Kurti Set", "price": 1499, "sale_price": None, "stock": 70, "type": "Clothing", "desc": "Comfortable cotton kurti with matching bottoms."},
             ],
         },
     },
@@ -46,7 +47,23 @@ SEED_CATALOG = {
 }
 
 
+def _apply_seed_sizes(product, product_type, total_stock):
+    """Spread the seed stock evenly over the type's sizes."""
+    product.product_type_id = product_type.id
+    if not product_type.sizes:
+        return
+    per_size, extra = divmod(total_stock, len(product_type.sizes))
+    product.size_label = product_type.size_label
+    product.sizes = [
+        ProductSize(name=name, stock_quantity=per_size + (1 if i < extra else 0))
+        for i, name in enumerate(product_type.sizes)
+    ]
+
+
 def run_seed_data():
+    AdminProductTypeService.create_defaults()
+    types_by_name = {t.name: t for t in ProductType.all()}
+
     for cat_index, (cat_name, cat_data) in enumerate(SEED_CATALOG.items()):
         category = Category.first(Category.name == cat_name)
         if category is None:
@@ -91,4 +108,6 @@ def run_seed_data():
                     low_stock_threshold=5,
                     is_active=True,
                 )
+                if item.get("type") in types_by_name:
+                    _apply_seed_sizes(product, types_by_name[item["type"]], item["stock"])
                 product.put()

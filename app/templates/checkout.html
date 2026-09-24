@@ -116,7 +116,7 @@
           <h2 class="h5 mb-3">Order summary</h2>
           {% for item in summary.cart_items %}
           <div class="d-flex justify-content-between small mb-2">
-            <span>{{ item.product.name }} &times; {{ item.quantity }}</span>
+            <span>{{ item.product.name }}{% if item.size %} <span class="line-size">({{ item.product.display_size_label }}: {{ item.size }})</span>{% endif %} &times; {{ item.quantity }}</span>
             <span>₹{{ '%.2f'|format(item.subtotal) }}</span>
           </div>
           {% endfor %}

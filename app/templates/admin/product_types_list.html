@@ -1,0 +1,48 @@
+{% extends "admin/base.html" %}
+{% block title %}Product types - Admin{% endblock %}
+{% block admin_content %}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+  <h1 class="h3 mb-0">Product types</h1>
+  <div class="d-flex gap-2">
+    <form action="{{ url_for('admin.product_type_defaults') }}" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-outline-secondary btn-sm"><i class="bi bi-magic"></i> Add common types</button>
+    </form>
+    <a href="{{ url_for('admin.product_type_new') }}" class="btn btn-primary btn-sm"><i class="bi bi-plus-circle"></i> New product type</a>
+  </div>
+</div>
+<p class="text-muted small mb-4">A product type decides which sizes a product can be sold in (e.g. Clothing: S, M, L; Footwear: UK 6, UK 7). Pick the type when adding a product, then set stock per size.</p>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table align-middle mb-0">
+      <thead><tr><th>Name</th><th>Label</th><th>Sizes</th><th>Products</th><th>Status</th><th>Sort</th><th></th></tr></thead>
+      <tbody>
+      {% for t in product_types %}
+        <tr>
+          <td>{{ t.name }}</td>
+          <td class="text-muted small">{{ t.size_label or 'Size' }}</td>
+          <td>
+            {% for size in t.sizes %}<span class="badge text-bg-light border me-1">{{ size }}</span>{% else %}<span class="text-muted small">No sizes (single stock)</span>{% endfor %}
+          </td>
+          <td>{{ product_counts.get(t.id, 0) }}</td>
+          <td><span class="badge bg-{{ 'success' if t.is_active else 'secondary' }}">{{ 'Active' if t.is_active else 'Inactive' }}</span></td>
+          <td>{{ t.sort_order }}</td>
+          <td class="text-end text-nowrap">
+            <a href="{{ url_for('admin.product_type_edit', type_id=t.id) }}" class="btn btn-sm btn-outline-secondary">Edit</a>
+            {% if t.is_active %}
+            <form action="{{ url_for('admin.product_type_delete', type_id=t.id) }}" method="post" class="d-inline" data-confirm="Deactivate this product type? Existing products keep their sizes.">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-sm btn-outline-danger">Deactivate</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="text-center text-muted py-4">No product types yet. Use "Add common types" to start with Clothing, Footwear and more.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

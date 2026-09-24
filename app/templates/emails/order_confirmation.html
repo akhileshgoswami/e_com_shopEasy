@@ -4,7 +4,7 @@
 <p>Hi {{ order.user.name }}, thanks for your order! Here's a summary:</p>
 <table style="width:100%;border-collapse:collapse;">
 {% for item in order.items %}
-<tr><td style="padding:4px 0;">{{ item.product_name }} &times; {{ item.quantity }}</td><td style="text-align:right;">₹{{ '%.2f'|format(item.subtotal) }}</td></tr>
+<tr><td style="padding:4px 0;">{{ item.product_name }}{% if item.size %} (Size: {{ item.size }}){% endif %} &times; {{ item.quantity }}</td><td style="text-align:right;">₹{{ '%.2f'|format(item.subtotal) }}</td></tr>
 {% endfor %}
 <tr><td style="padding-top:8px;font-weight:bold;">Total</td><td style="text-align:right;padding-top:8px;font-weight:bold;">₹{{ '%.2f'|format(order.total_amount) }}</td></tr>
 </table>

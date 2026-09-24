@@ -24,12 +24,13 @@
       <div class="card-header fw-semibold">Items</div>
       <div class="table-responsive">
         <table class="table mb-0">
-          <thead><tr><th>Product</th><th>SKU</th><th>Qty</th><th>Unit price</th><th>Subtotal</th></tr></thead>
+          <thead><tr><th>Product</th><th>SKU</th><th>Size</th><th>Qty</th><th>Unit price</th><th>Subtotal</th></tr></thead>
           <tbody>
           {% for item in order.items %}
             <tr>
               <td>{{ item.product_name }}</td>
               <td class="text-muted small">{{ item.sku }}</td>
+              <td>{% if item.size %}<span class="badge text-bg-light border">{{ item.size }}</span>{% else %}<span class="text-muted">&mdash;</span>{% endif %}</td>
               <td>{{ item.quantity }}</td>
               <td>₹{{ '%.2f'|format(item.unit_price) }}</td>
               <td>₹{{ '%.2f'|format(item.subtotal) }}</td>

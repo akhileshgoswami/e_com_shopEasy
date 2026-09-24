@@ -125,6 +125,7 @@ class OrderItem(BaseModel):
     product_id = ndb.IntegerProperty()
     product_name = ndb.TextProperty(required=True)
     sku = ndb.TextProperty(required=True)
+    size = ndb.TextProperty()
     quantity = ndb.IntegerProperty(required=True, indexed=False)
     unit_price = DecimalProperty(required=True, indexed=False)
     subtotal = DecimalProperty(required=True, indexed=False)

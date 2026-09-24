@@ -1,0 +1,23 @@
+{% extends "admin/base.html" %}
+{% import "partials/forms.html" as f %}
+{% block title %}{{ 'New product type' if is_new else 'Edit product type' }} - Admin{% endblock %}
+{% block admin_content %}
+<h1 class="h3 mb-4">{{ 'New product type' if is_new else 'Edit product type: ' + product_type.name }}</h1>
+<div class="card card-body" style="max-width: 640px;">
+  <form method="post">
+    {{ form.hidden_tag() }}
+    {{ f.render_field(form.name) }}
+    {{ f.render_field(form.size_label) }}
+    <p class="form-text mt-n2 mb-3">What customers see above the size buttons, e.g. "Size", "Shoe size", "Waist".</p>
+    {{ f.render_field(form.sizes) }}
+    <p class="form-text mt-n2 mb-3">One size per line or comma separated, in the order to show them, e.g. <code>S, M, L, XL</code>. Leave empty for products that aren't sold by size.</p>
+    {{ f.render_field(form.sort_order) }}
+    {{ f.render_field(form.is_active) }}
+    {% if not is_new %}
+    <div class="alert alert-info small">Products keep their current sizes and stock until you save them again, so removing a size here never deletes stock.</div>
+    {% endif %}
+    <button type="submit" class="btn btn-primary">Save</button>
+    <a href="{{ url_for('admin.product_types') }}" class="btn btn-link">Cancel</a>
+  </form>
+</div>
+{% endblock %}

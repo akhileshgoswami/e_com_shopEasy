@@ -124,8 +124,9 @@ def product_detail(slug):
     in_cart_quantity = 0
     if current_user.is_authenticated:
         # The cart id is the user id.
-        item = CartItem.first(CartItem.cart_id == current_user.id, CartItem.product_id == product.id)
-        in_cart_quantity = item.quantity if item else 0
+        # Several lines when the product is in the cart in more than one size.
+        items = CartItem.all(CartItem.cart_id == current_user.id, CartItem.product_id == product.id)
+        in_cart_quantity = sum(item.quantity for item in items)
 
     return render_template("product_detail.html", product=product, related=related, in_cart_quantity=in_cart_quantity)
 

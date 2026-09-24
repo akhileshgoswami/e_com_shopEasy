@@ -6,7 +6,7 @@ from app.cart.services import CartError, CartService
 from app.models import Product
 
 PENDING_CART_SESSION_KEY = "pending_cart_action"
-# {"product_id", "quantity"} while the customer is checking out a single
+# {"product_id", "quantity", "size"} while the customer is checking out a single
 # product via "Buy now" instead of the whole cart.
 BUY_NOW_SESSION_KEY = "buy_now"
 
@@ -19,6 +19,7 @@ def _wants_json():
 def add_to_cart():
     product_id = request.form.get("product_id", type=int) or (request.get_json(silent=True) or {}).get("product_id")
     quantity = request.form.get("quantity", 1, type=int) or (request.get_json(silent=True) or {}).get("quantity", 1)
+    size = request.form.get("size") or (request.get_json(silent=True) or {}).get("size")
 
     if not product_id:
         if _wants_json():
@@ -27,7 +28,7 @@ def add_to_cart():
         return redirect(request.referrer or url_for("shop.home"))
 
     if not current_user.is_authenticated:
-        session[PENDING_CART_SESSION_KEY] = {"product_id": int(product_id), "quantity": int(quantity)}
+        session[PENDING_CART_SESSION_KEY] = {"product_id": int(product_id), "quantity": int(quantity), "size": size}
         next_url = url_for("cart.view_cart")
         if _wants_json():
             return jsonify({"success": False, "auth_required": True, "redirect": url_for("auth.login", next=next_url)}), 401
@@ -35,7 +36,7 @@ def add_to_cart():
         return redirect(url_for("auth.login", next=next_url))
 
     try:
-        CartService.add_item(current_user, int(product_id), int(quantity))
+        CartService.add_item(current_user, int(product_id), int(quantity), size=size)
     except CartError as exc:
         if _wants_json():
             return jsonify({"success": False, "message": str(exc)}), 400
@@ -57,16 +58,21 @@ def buy_now():
     if product is None or not product.is_active:
         flash("This product is no longer available.", "danger")
         return redirect(request.referrer or url_for("shop.home"))
-    if not product.in_stock:
-        flash(f"'{product.name}' is out of stock.", "danger")
+    try:
+        size = CartService.resolve_size(product, request.form.get("size"))
+    except CartError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("shop.product_detail", slug=product.slug))
+    if product.stock_for(size) <= 0:
+        flash(f"{CartService.line_label(product, size)} is out of stock.", "danger")
         return redirect(request.referrer or url_for("shop.product_detail", slug=product.slug))
 
     if not current_user.is_authenticated:
-        session[PENDING_CART_SESSION_KEY] = {"product_id": product.id, "quantity": quantity, "buy_now": True}
+        session[PENDING_CART_SESSION_KEY] = {"product_id": product.id, "quantity": quantity, "size": size, "buy_now": True}
         flash("Please log in to continue to checkout.", "info")
         return redirect(url_for("auth.login", next=url_for("checkout.checkout")))
 
-    session[BUY_NOW_SESSION_KEY] = {"product_id": product.id, "quantity": quantity}
+    session[BUY_NOW_SESSION_KEY] = {"product_id": product.id, "quantity": quantity, "size": size}
     return redirect(url_for("checkout.checkout"))
 
 

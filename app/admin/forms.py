@@ -35,16 +35,29 @@ class SubcategoryForm(FlaskForm):
     sort_order = IntegerField("Sort order", validators=[Optional(), NumberRange(min=0)], default=0)
 
 
+class ProductTypeForm(FlaskForm):
+    name = StringField("Name", validators=[DataRequired(), Length(max=80)])
+    size_label = StringField("Size label", validators=[Optional(), Length(max=40)], default="Size")
+    # One size per line or comma separated; parsed by AdminProductTypeService.
+    sizes = TextAreaField("Sizes", validators=[Optional(), Length(max=2000)])
+    is_active = BooleanField("Active", default=True)
+    sort_order = IntegerField("Sort order", validators=[Optional(), NumberRange(min=0)], default=0)
+
+
 class ProductForm(FlaskForm):
     category_id = SelectField("Category", coerce=int, validators=[DataRequired()])
     subcategory_id = SelectField("Subcategory", coerce=int, validators=[Optional()])
+    # 0 = no type (not sold by size). Per-size stock arrives as plain
+    # size_on / size_stock__<name> inputs rendered from the chosen type.
+    product_type_id = SelectField("Product type", coerce=int, validators=[Optional()])
     name = StringField("Name", validators=[DataRequired(), Length(max=200)])
     sku = StringField("SKU", validators=[DataRequired(), Length(max=64)])
     short_description = StringField("Short description", validators=[Optional(), Length(max=500)])
     description = TextAreaField("Description", validators=[Optional()])
     price = DecimalField("Price", places=2, validators=[InputRequired(), NumberRange(min=0)])
     sale_price = DecimalField("Sale price", places=2, validators=[Optional(), NumberRange(min=0)])
-    stock_quantity = IntegerField("Stock quantity", validators=[InputRequired(), NumberRange(min=0)])
+    # Ignored (derived from the sizes) when the product is sold by size.
+    stock_quantity = IntegerField("Stock quantity", validators=[Optional(), NumberRange(min=0)], default=0)
     low_stock_threshold = IntegerField("Low stock threshold", validators=[InputRequired(), NumberRange(min=0)], default=5)
     is_active = BooleanField("Active", default=True)
 
@@ -54,7 +67,8 @@ class ProductImageForm(FlaskForm):
 
 
 class StockUpdateForm(FlaskForm):
-    stock_quantity = IntegerField("Stock quantity", validators=[InputRequired(), NumberRange(min=0)])
+    # Sized products send size_stock__<name> inputs instead.
+    stock_quantity = IntegerField("Stock quantity", validators=[Optional(), NumberRange(min=0)])
     low_stock_threshold = IntegerField("Low stock threshold", validators=[InputRequired(), NumberRange(min=0)])
 
 

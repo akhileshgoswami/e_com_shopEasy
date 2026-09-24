@@ -27,7 +27,12 @@
       {% for product in products %}
         <tr>
           <td><img src="{{ product.image_url or url_for('static', filename='images/placeholder.svg') }}" style="width:40px;height:40px;object-fit:contain;background:#fafbfc;border:1px solid #e7ebf0;border-radius:0.375rem;"></td>
-          <td>{{ product.name }}</td>
+          <td>
+            {{ product.name }}
+            {% if product.has_sizes %}
+            <div class="small text-muted">{{ product.display_size_label }}: {{ product.size_names|join(', ') }}</div>
+            {% endif %}
+          </td>
           <td class="text-muted small">{{ product.sku }}</td>
           <td>₹{{ '%.2f'|format(product.effective_price) }}</td>
           <td>

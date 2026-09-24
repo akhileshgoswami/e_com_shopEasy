@@ -37,7 +37,7 @@
           <div class="list-group-item d-flex justify-content-between">
             <div>
               <p class="mb-0 fw-semibold">{{ item.product_name }}</p>
-              <p class="mb-0 small text-muted">SKU: {{ item.sku }} &middot; Qty: {{ item.quantity }} &times; ₹{{ '%.2f'|format(item.unit_price) }}</p>
+              <p class="mb-0 small text-muted">SKU: {{ item.sku }}{% if item.size %} &middot; Size: <strong>{{ item.size }}</strong>{% endif %} &middot; Qty: {{ item.quantity }} &times; ₹{{ '%.2f'|format(item.unit_price) }}</p>
             </div>
             <span class="fw-semibold">₹{{ '%.2f'|format(item.subtotal) }}</span>
           </div>

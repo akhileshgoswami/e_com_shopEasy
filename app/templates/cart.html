@@ -21,12 +21,13 @@
               <img src="{{ item.product.image_url or url_for('static', filename='images/placeholder.svg') }}" alt="{{ item.product.name }}">
               <div class="flex-grow-1">
                 <a href="{{ url_for('shop.product_detail', slug=item.product.slug) }}" class="text-decoration-none text-dark fw-semibold">{{ item.product.name }}</a>
+                {% if item.size %}<p class="mb-0 line-size">{{ item.product.display_size_label }}: <strong>{{ item.size }}</strong></p>{% endif %}
                 <p class="mb-1 small text-muted">₹{{ '%.2f'|format(item.unit_price) }} each</p>
                 <form action="{{ url_for('cart.update_item', item_id=item.id) }}" method="post" class="d-flex align-items-center gap-2">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <div class="input-group input-group-sm qty-stepper" style="width: 120px;">
                     <button class="btn btn-outline-secondary" type="button" aria-label="Decrease quantity" onclick="const i=this.nextElementSibling; if(i.value>1){i.stepDown(); this.form.submit();}">-</button>
-                    <input type="number" name="quantity" value="{{ item.quantity }}" min="1" max="{{ item.product.stock_quantity }}" class="form-control text-center" onchange="this.form.submit()">
+                    <input type="number" name="quantity" value="{{ item.quantity }}" min="1" max="{{ item.product.stock_for(item.size) }}" class="form-control text-center" onchange="this.form.submit()">
                     <button class="btn btn-outline-secondary" type="button" aria-label="Increase quantity" onclick="const i=this.previousElementSibling; i.stepUp(); this.form.submit();">+</button>
                   </div>
                 </form>

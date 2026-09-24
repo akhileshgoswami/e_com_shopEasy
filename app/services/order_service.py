@@ -54,11 +54,14 @@ class OrderService:
 
             to_put = [current]
             if new_status in OrderStatus.STOCK_RESTORING and current.stock_committed:
-                products = ndb.get_multi([ndb.Key(Product, item.product_id) for item in items])
-                for item, product in zip(items, products):
+                # One entity per product so several sizes of it all land.
+                product_ids = list(dict.fromkeys(item.product_id for item in items))
+                products = dict(zip(product_ids, ndb.get_multi([ndb.Key(Product, pid) for pid in product_ids])))
+                for item in items:
+                    product = products.get(item.product_id)
                     if product is not None:
-                        InventoryService.return_stock(product, item.quantity)
-                        to_put.append(product)
+                        InventoryService.return_stock(product, item.quantity, item.size)
+                to_put.extend(p for p in products.values() if p is not None)
                 current.stock_committed = False
 
             current.order_status = new_status

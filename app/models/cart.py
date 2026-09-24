@@ -26,6 +26,9 @@ class Cart(BaseModel):
 class CartItem(BaseModel):
     cart_id = ndb.IntegerProperty(required=True)
     product_id = ndb.IntegerProperty(required=True)
+    # Chosen size for sized products; None otherwise. The same product in
+    # two sizes is two cart lines.
+    size = ndb.TextProperty()
     quantity = ndb.IntegerProperty(default=1, indexed=False)
     unit_price = DecimalProperty(required=True, indexed=False)
 
