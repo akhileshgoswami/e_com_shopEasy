@@ -116,15 +116,16 @@ class SiteContentService:
 # the admin Settings screen rather than the Content list.
 BRANDING_DEFAULTS = {
     "site_name": "ShopEasy",
-    "theme_color": "#b8873f",
+    "theme_color": "#4f46e5",
     "logo_url": "",
     "logo_path": "",
     "show_name_with_logo": "1",
-    "heading_font": "fraunces",
+    "heading_font": "poppins",
     "body_font": "inter",
 }
 
 THEME_PRESETS = [
+    ("Indigo", "#4f46e5"),
     ("Gold", "#b8873f"),
     ("Emerald", "#1f8a5b"),
     ("Ocean", "#1f6fb2"),
@@ -324,3 +325,111 @@ class HeroBannerService:
 
         if (image or remove_image) and old_path:
             _delete_stored_file(old_path)
+
+
+# ---------------------------------------------------------------------------
+# Storefront: everything on the customer-facing pages that isn't product
+# data — CTA colour, homepage copy/toggles, and shipping/tax rules. Stored as
+# plain strings in SiteContent like branding. Text fields may contain
+# "{free_delivery}", replaced with the current free-delivery threshold.
+# ---------------------------------------------------------------------------
+STOREFRONT_DEFAULTS = {
+    "accent_color": "#ff5a5f",
+    # Shipping / tax (fall back to env config when never saved)
+    "free_shipping_threshold": None,
+    "shipping_charge": None,
+    "tax_rate_percent": None,
+    # Top bar
+    "topbar_enabled": "1",
+    "topbar_perk_1": "Free delivery over ₹{free_delivery}",
+    "topbar_perk_2": "Secure payments",
+    "topbar_perk_3": "Cash on delivery",
+    # Hero extras (title/subtitle/image live in HeroBannerService)
+    "hero_secondary_text": "Today's deals",
+    "hero_perk_1": "Free delivery over ₹{free_delivery}",
+    "hero_perk_2": "Secure checkout",
+    "hero_perk_3": "Cash on delivery",
+    "hero_sticker": "New deals weekly",
+    "hero_collage_enabled": "1",
+    # Finder card
+    "finder_enabled": "1",
+    "finder_title": "Find what you need",
+    "finder_placeholder": 'Try "kettle" or "denim"',
+    "finder_button": "Find products",
+    "finder_deals_label": "Deals only",
+    "coupon_enabled": "1",
+    "coupon_text": "Free delivery on orders over ₹{free_delivery} — plus new deals every week.",
+    "coupon_link_text": "See offers",
+}
+
+STOREFRONT_LABELS = {key: key.replace("_", " ").capitalize() for key in STOREFRONT_DEFAULTS}
+_STOREFRONT_FLAGS = ("topbar_enabled", "hero_collage_enabled", "finder_enabled", "coupon_enabled")
+_STOREFRONT_MONEY = {
+    "free_shipping_threshold": "FREE_SHIPPING_THRESHOLD",
+    "shipping_charge": "DEFAULT_SHIPPING_CHARGE",
+    "tax_rate_percent": "TAX_RATE_PERCENT",
+}
+
+
+def _format_amount(value):
+    return f"{value:,.0f}" if value == value.to_integral_value() else f"{value:,.2f}"
+
+
+class StorefrontService:
+    @staticmethod
+    def raw(use_db=True):
+        """Saved string values layered over defaults (money fields from env
+        config), for pre-filling the admin form."""
+        from decimal import Decimal
+
+        rows = SiteContent.get_many(STOREFRONT_DEFAULTS.keys()) if use_db else {}
+        values = {}
+        for key, default in STOREFRONT_DEFAULTS.items():
+            row = rows.get(key)
+            if row is not None:
+                values[key] = row.value
+            elif key in _STOREFRONT_MONEY:
+                values[key] = str(Decimal(str(current_app.config[_STOREFRONT_MONEY[key]])))
+            else:
+                values[key] = default
+        return values
+
+    @classmethod
+    def get(cls, use_db=True):
+        """Typed settings for templates and checkout: flags as bools, money
+        as Decimal, "{free_delivery}" filled in. use_db=False gives the
+        defaults (for rendering error pages when the datastore is down)."""
+        from decimal import Decimal, InvalidOperation
+
+        values = cls.raw(use_db)
+        settings = {}
+        for key in _STOREFRONT_MONEY:
+            try:
+                settings[key] = Decimal(values[key])
+            except (InvalidOperation, TypeError):
+                settings[key] = Decimal(str(current_app.config[_STOREFRONT_MONEY[key]]))
+        free_delivery = _format_amount(settings["free_shipping_threshold"])
+        settings["free_delivery"] = free_delivery
+        for key, value in values.items():
+            if key in _STOREFRONT_MONEY:
+                continue
+            if key in _STOREFRONT_FLAGS:
+                settings[key] = value == "1"
+            else:
+                settings[key] = (value or "").replace("{free_delivery}", free_delivery)
+        settings["accent"] = build_theme_palette(values["accent_color"])
+        return settings
+
+    @staticmethod
+    def update(values):
+        """values: {key: str|bool|Decimal} for keys in STOREFRONT_DEFAULTS."""
+        pending = []
+        for key, value in values.items():
+            if key not in STOREFRONT_DEFAULTS:
+                raise ValueError(f"Unknown storefront setting '{key}'.")
+            if key in _STOREFRONT_FLAGS:
+                value = "1" if value else "0"
+            elif key == "accent_color":
+                value = value.lower()
+            pending.append((key, "" if value is None else str(value).strip(), STOREFRONT_LABELS[key]))
+        _set_values(pending)

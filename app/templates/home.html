@@ -2,18 +2,145 @@
 {% import "partials/product_card.html" as pc %}
 
 {% block content %}
-<div class="container py-4">
+{#- Icon for a category tab, guessed from its name; admins can upload a
+    category image to override it. -#}
+{% set category_icons = [
+  (("electronic", "mobile", "phone", "gadget", "laptop"), "bi-phone", "#4f46e5"),
+  (("fashion", "cloth", "apparel", "wear", "men", "women"), "bi-bag-heart", "#e8468a"),
+  (("home", "kitchen", "furniture", "decor"), "bi-house-heart", "#f59f0b"),
+  (("beauty", "cosmetic", "personal", "care"), "bi-stars", "#a855f7"),
+  (("sport", "fitness", "outdoor"), "bi-bicycle", "#10b981"),
+  (("book", "stationery"), "bi-book", "#0ea5e9"),
+  (("toy", "kid", "baby"), "bi-balloon-heart", "#ef4444"),
+  (("grocery", "food"), "bi-basket", "#22c55e"),
+] %}
+{% macro category_icon(name) -%}
+  {%- set lowered = name.lower() -%}
+  {%- set found = namespace(icon="bi-grid", color="#4f46e5") -%}
+  {%- for words, icon, color in category_icons|reverse -%}
+    {%- for word in words if word in lowered -%}{%- set found.icon = icon -%}{%- set found.color = color -%}{%- endfor -%}
+  {%- endfor -%}
+  <span class="sky-tab-icon" style="--tab-color: {{ found.color }}"><i class="bi {{ found.icon }}"></i></span>
+{%- endmacro %}
 
-  <div class="hero-banner mb-5{{ ' has-image' if hero.hero_image_url }}"{% if hero.hero_image_url %} style="background-image: url('{{ hero.hero_image_url }}');"{% endif %}>
-    <div class="row align-items-center">
-      <div class="col-lg-7">
-        <p class="eyebrow mb-2" style="color: var(--gold);">{{ hero.hero_eyebrow }}</p>
-        <h1 class="display-6">{{ hero.hero_title }}</h1>
-        <p class="lead mb-4">{{ hero.hero_subtitle }}</p>
-        <a href="{{ url_for('shop.product_list') }}" class="btn btn-light btn-lg">{{ hero.hero_button_text }} <i class="bi bi-arrow-right"></i></a>
+<section class="sky-hero{{ ' has-image' if hero.hero_image_url }}"{% if hero.hero_image_url %} style="--hero-image: url('{{ hero.hero_image_url }}');"{% endif %}>
+  <div class="sky-pattern" aria-hidden="true"></div>
+  <div class="container position-relative">
+    <div class="row align-items-center g-4 g-lg-5">
+      <div class="col-lg-6 sky-hero-copy">
+        {% if hero.hero_eyebrow %}<p class="sky-eyebrow"><i class="bi bi-stars"></i> {{ hero.hero_eyebrow }}</p>{% endif %}
+        <h1>{{ hero.hero_title }}</h1>
+        <p class="sky-subtitle">{{ hero.hero_subtitle }}</p>
+        <div class="sky-hero-actions">
+          <a href="{{ url_for('shop.product_list') }}" class="sky-cta">{{ hero.hero_button_text }} <i class="bi bi-arrow-right"></i></a>
+          {% if store.hero_secondary_text %}
+          <a href="{{ url_for('shop.product_list', on_sale=1) }}" class="sky-cta-ghost"><i class="bi bi-lightning-charge-fill"></i> {{ store.hero_secondary_text }}</a>
+          {% endif %}
+        </div>
+        <ul class="sky-perks">
+          {% for icon, text in [("bi-truck", store.hero_perk_1), ("bi-shield-lock", store.hero_perk_2), ("bi-cash-coin", store.hero_perk_3)] if text %}
+          <li><i class="bi {{ icon }}"></i> {{ text }}</li>
+          {% endfor %}
+        </ul>
       </div>
+
+      {% if categories and store.hero_collage_enabled %}
+      <div class="col-lg-6 d-none d-md-block">
+        <div class="sky-collage">
+          {% for category in categories[:4] %}
+          <a class="sky-tile sky-tile-{{ loop.index }}" href="{{ url_for('shop.category_detail', category_slug=category.slug) }}">
+            {% if category.image_url %}
+            <img src="{{ category.image_url }}" alt="" class="sky-tile-img" loading="lazy">
+            {% else %}
+            {{ category_icon(category.name) }}
+            {% endif %}
+            <span class="sky-tile-name">{{ category.name }}</span>
+            <span class="sky-tile-cta">Explore <i class="bi bi-arrow-up-right"></i></span>
+          </a>
+          {% endfor %}
+          {% if store.hero_sticker %}<span class="sky-sticker" aria-hidden="true"><i class="bi bi-tag-fill"></i> {{ store.hero_sticker }}</span>{% endif %}
+        </div>
+      </div>
+      {% endif %}
     </div>
   </div>
+  <svg class="sky-wave" viewBox="0 0 1440 80" preserveAspectRatio="none" aria-hidden="true"><path d="M0 48c160 26 320 34 480 20S800 10 960 12s320 38 480 44v24H0z"/></svg>
+</section>
+
+{% if store.finder_enabled %}
+<div class="container">
+  <form class="sky-card sky-finder" action="{{ url_for('shop.product_list') }}" method="get">
+    <div class="sky-finder-head">
+      <h2 class="sky-finder-title">{{ store.finder_title }}</h2>
+      <label class="sky-switch">
+        <input type="checkbox" name="on_sale" value="1" role="switch">
+        <span class="sky-switch-track" aria-hidden="true"></span>
+        {{ store.finder_deals_label }}
+      </label>
+    </div>
+
+    <div class="sky-tabs" role="tablist" aria-label="Shop by category">
+      <button type="button" class="sky-tab active" role="tab" aria-selected="true" data-category="">
+        <span class="sky-tab-icon" style="--tab-color: #4f46e5"><i class="bi bi-grid-fill"></i></span> Everything
+      </button>
+      {% for category in categories %}
+      <button type="button" class="sky-tab" role="tab" aria-selected="false" data-category="{{ category.slug }}">
+        {% if category.image_url %}
+        <img src="{{ category.image_url }}" alt="" class="sky-tab-img" loading="lazy">
+        {% else %}
+        {{ category_icon(category.name) }}
+        {% endif %}
+        {{ category.name }}
+      </button>
+      {% endfor %}
+    </div>
+
+    <div class="sky-fields">
+      <label class="sky-field sky-field-wide">
+        <span><i class="bi bi-search"></i> Product</span>
+        <input type="search" name="q" placeholder="{{ store.finder_placeholder }}">
+      </label>
+      <label class="sky-field">
+        <span><i class="bi bi-grid"></i> Category</span>
+        <select name="category" class="sky-category-select">
+          <option value="">All categories</option>
+          {% for category in categories %}
+          <option value="{{ category.slug }}">{{ category.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <div class="sky-field">
+        <span><i class="bi bi-currency-rupee"></i> Budget</span>
+        <div class="sky-price-inputs">
+          <input type="number" name="min_price" min="0" step="1" placeholder="Min" aria-label="Minimum price">
+          <span aria-hidden="true">to</span>
+          <input type="number" name="max_price" min="0" step="1" placeholder="Max" aria-label="Maximum price">
+        </div>
+      </div>
+      <label class="sky-field">
+        <span><i class="bi bi-sort-down"></i> Sort</span>
+        <select name="sort">
+          <option value="newest">Newest first</option>
+          <option value="price_low">Price: low to high</option>
+          <option value="price_high">Price: high to low</option>
+          <option value="name_asc">Name: A to Z</option>
+        </select>
+      </label>
+      <button type="submit" class="sky-search-btn">{{ store.finder_button or "Search" }} <i class="bi bi-arrow-right-short"></i></button>
+    </div>
+
+    {% if store.coupon_enabled and store.coupon_text %}
+    <a class="sky-coupon" href="{{ url_for('shop.product_list', on_sale=1) }}">
+      <span class="sky-coupon-stub"><i class="bi bi-ticket-perforated"></i></span>
+      <span class="sky-coupon-text">{{ store.coupon_text }}</span>
+      {% if store.coupon_link_text %}<span class="sky-coupon-go">{{ store.coupon_link_text }} <i class="bi bi-chevron-right"></i></span>{% endif %}
+    </a>
+    {% endif %}
+  </form>
+</div>
+{% endif %}
+
+<div class="container pt-5 pb-4">
 
   {% if categories %}
   <section class="mb-5">

@@ -2,10 +2,12 @@ from flask import flash, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required
 
 from app.auth.forms import AddressForm
+from app.cart.routes import BUY_NOW_SESSION_KEY
 from app.checkout import checkout_bp
 from app.checkout.services import CheckoutError, CheckoutService
 from app.models import Address, OrderStatus, PaymentMethod
 from app.services.order_service import OrderService, OrderTransitionError
+from app.services.payment_settings_service import PaymentSettingsService
 
 COUPON_SESSION_KEY = "checkout_coupon_code"
 
@@ -13,12 +15,20 @@ COUPON_SESSION_KEY = "checkout_coupon_code"
 @checkout_bp.route("/checkout", methods=["GET"])
 @login_required
 def checkout():
+    if request.args.get("cart"):
+        session.pop(BUY_NOW_SESSION_KEY, None)
     addresses = Address.for_user(current_user.id)
     coupon_code = session.get(COUPON_SESSION_KEY)
-    summary = CheckoutService.build_summary(current_user, coupon_code=coupon_code)
+    buy_now = session.get(BUY_NOW_SESSION_KEY)
+    summary = CheckoutService.build_summary(current_user, coupon_code=coupon_code, buy_now=buy_now)
 
-    if not summary["items"]:
-        flash("Your cart is empty.", "info")
+    if not summary["cart_items"]:
+        if buy_now:
+            session.pop(BUY_NOW_SESSION_KEY, None)
+            for message in summary["adjustments"]:
+                flash(message, "danger")
+        else:
+            flash("Your cart is empty.", "info")
         return redirect(url_for("cart.view_cart"))
 
     for message in summary["adjustments"]:
@@ -27,6 +37,7 @@ def checkout():
     address_form = AddressForm()
     return render_template(
         "checkout.html",
+        payment_methods=PaymentSettingsService.enabled_methods(),
         addresses=addresses,
         summary=summary,
         address_form=address_form,
@@ -82,17 +93,20 @@ def place_order():
         flash("Please select a shipping address.", "danger")
         return redirect(url_for("checkout.checkout"))
 
-    if payment_method not in PaymentMethod.CHOICES:
-        flash("Please select a valid payment method.", "danger")
+    if payment_method not in PaymentSettingsService.enabled_methods():
+        flash("Please select an available payment method.", "danger")
         return redirect(url_for("checkout.checkout"))
 
     try:
-        order = CheckoutService.create_order(current_user, address, payment_method, coupon_code=coupon_code)
+        order = CheckoutService.create_order(
+            current_user, address, payment_method, coupon_code=coupon_code, buy_now=session.get(BUY_NOW_SESSION_KEY)
+        )
     except CheckoutError as exc:
         flash(str(exc), "danger")
         return redirect(url_for("checkout.checkout"))
 
     session.pop(COUPON_SESSION_KEY, None)
+    session.pop(BUY_NOW_SESSION_KEY, None)
 
     if payment_method == PaymentMethod.COD:
         return redirect(url_for("checkout.order_success", order_id=order.id))

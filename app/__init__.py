@@ -134,6 +134,7 @@ def _register_context_processors(app):
             BRANDING_DEFAULTS,
             BrandingService,
             SiteContentService,
+            StorefrontService,
             build_font_theme,
             build_theme_palette,
         )
@@ -143,14 +144,18 @@ def _register_context_processors(app):
         nav_categories = []
         footer_contact = {}
         branding = dict(BRANDING_DEFAULTS)
+        store = None
         try:
             branding = BrandingService.get()
+            store = StorefrontService.get()
             if current_user.is_authenticated:
                 cart_item_count = CartService.get_item_count(current_user)
             nav_categories = CategoryService.list_active_categories()
             footer_contact = SiteContentService.get_many(["contact_email", "contact_phone", "contact_address"])
         except Exception:
             app.logger.exception("Failed to load navigation context (database unavailable?)")
+        if store is None:
+            store = StorefrontService.get(use_db=False)
 
         return {
             "nav_categories": nav_categories,
@@ -163,6 +168,7 @@ def _register_context_processors(app):
             "now_year": datetime.now(timezone.utc).year,
             "google_oauth_enabled": app.config.get("GOOGLE_OAUTH_ENABLED", False),
             "footer_contact": footer_contact,
+            "store": store,
         }
 
 

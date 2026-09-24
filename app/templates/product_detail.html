@@ -77,15 +77,18 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="product_id" value="{{ product.id }}">
         <div class="d-flex align-items-center gap-3">
-          <div class="input-group" style="max-width: 140px;">
-            <button class="btn btn-outline-secondary" type="button" onclick="const i=this.nextElementSibling; i.stepDown();">-</button>
+          <div class="input-group qty-stepper" style="max-width: 140px;">
+            <button class="btn btn-outline-secondary" type="button" aria-label="Decrease quantity" onclick="const i=this.nextElementSibling; i.stepDown();">-</button>
             <input type="number" name="quantity" value="1" min="1" max="{{ product.stock_quantity }}" class="form-control text-center">
-            <button class="btn btn-outline-secondary" type="button" onclick="const i=this.previousElementSibling; i.stepUp();">+</button>
+            <button class="btn btn-outline-secondary" type="button" aria-label="Increase quantity" onclick="const i=this.previousElementSibling; i.stepUp();">+</button>
           </div>
-          <button type="submit" class="btn btn-primary flex-grow-1" {{ 'disabled' if not product.in_stock }}>
+          <button type="submit" class="btn btn-outline-primary flex-grow-1" {{ 'disabled' if not product.in_stock }}>
             <i class="bi bi-cart-plus"></i> Add to cart
           </button>
         </div>
+        <button type="submit" class="btn btn-primary w-100 mt-2 buy-now-btn" formaction="{{ url_for('cart.buy_now') }}" data-buy-now {{ 'disabled' if not product.in_stock }}>
+          <i class="bi bi-lightning-charge-fill"></i> Buy now
+        </button>
         {% if in_cart_quantity %}
         <p class="small text-muted mt-2">You already have {{ in_cart_quantity }} in your cart.</p>
         {% endif %}

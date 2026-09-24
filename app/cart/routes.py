@@ -3,8 +3,12 @@ from flask_login import current_user, login_required
 
 from app.cart import cart_bp
 from app.cart.services import CartError, CartService
+from app.models import Product
 
 PENDING_CART_SESSION_KEY = "pending_cart_action"
+# {"product_id", "quantity"} while the customer is checking out a single
+# product via "Buy now" instead of the whole cart.
+BUY_NOW_SESSION_KEY = "buy_now"
 
 
 def _wants_json():
@@ -45,15 +49,39 @@ def add_to_cart():
     return redirect(request.referrer or url_for("cart.view_cart"))
 
 
+@cart_bp.route("/buy-now", methods=["POST"])
+def buy_now():
+    product_id = request.form.get("product_id", type=int)
+    quantity = max(1, request.form.get("quantity", 1, type=int) or 1)
+    product = Product.find(product_id)
+    if product is None or not product.is_active:
+        flash("This product is no longer available.", "danger")
+        return redirect(request.referrer or url_for("shop.home"))
+    if not product.in_stock:
+        flash(f"'{product.name}' is out of stock.", "danger")
+        return redirect(request.referrer or url_for("shop.product_detail", slug=product.slug))
+
+    if not current_user.is_authenticated:
+        session[PENDING_CART_SESSION_KEY] = {"product_id": product.id, "quantity": quantity, "buy_now": True}
+        flash("Please log in to continue to checkout.", "info")
+        return redirect(url_for("auth.login", next=url_for("checkout.checkout")))
+
+    session[BUY_NOW_SESSION_KEY] = {"product_id": product.id, "quantity": quantity}
+    return redirect(url_for("checkout.checkout"))
+
+
 @cart_bp.route("/cart")
 @login_required
 def view_cart():
+    # Going back to the cart means checking out the cart, not the buy-now item.
+    session.pop(BUY_NOW_SESSION_KEY, None)
     cart = CartService.get_or_create_cart(current_user)
     adjustments = CartService.sync_cart(cart)
     for message in adjustments:
         flash(message, "warning")
-    totals = CartService.get_totals(cart)
-    return render_template("cart.html", cart=cart, totals=totals)
+    items = cart.items
+    totals = CartService.get_totals(cart, items)
+    return render_template("cart.html", cart=cart, items=items, totals=totals)
 
 
 @cart_bp.route("/cart/update/<int:item_id>", methods=["POST"])

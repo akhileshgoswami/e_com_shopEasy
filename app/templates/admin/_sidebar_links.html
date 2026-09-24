@@ -1,15 +1,34 @@
 {% set p = request.path %}
-<ul class="nav flex-column gap-1">
-  <li class="nav-item"><a class="nav-link {{ 'active' if p == url_for('admin.dashboard') }}" href="{{ url_for('admin.dashboard') }}"><i class="bi bi-speedometer2"></i> Dashboard</a></li>
-  <li class="nav-item"><a class="nav-link {{ 'active' if p.startswith('/admin/categories') }}" href="{{ url_for('admin.categories') }}"><i class="bi bi-diagram-3"></i> Categories</a></li>
-  <li class="nav-item"><a class="nav-link {{ 'active' if p.startswith('/admin/subcategories') }}" href="{{ url_for('admin.subcategories') }}"><i class="bi bi-diagram-2"></i> Subcategories</a></li>
-  <li class="nav-item"><a class="nav-link {{ 'active' if p.startswith('/admin/products') }}" href="{{ url_for('admin.products') }}"><i class="bi bi-box-seam"></i> Products</a></li>
-  <li class="nav-item"><a class="nav-link {{ 'active' if p.startswith('/admin/inventory') }}" href="{{ url_for('admin.inventory') }}"><i class="bi bi-clipboard-data"></i> Inventory</a></li>
-  <li class="nav-item"><a class="nav-link {{ 'active' if p.startswith('/admin/orders') }}" href="{{ url_for('admin.orders') }}"><i class="bi bi-receipt"></i> Orders</a></li>
-  <li class="nav-item"><a class="nav-link {{ 'active' if p.startswith('/admin/payments') }}" href="{{ url_for('admin.payments') }}"><i class="bi bi-credit-card"></i> Payments</a></li>
-  <li class="nav-item"><a class="nav-link {{ 'active' if p.startswith('/admin/users') }}" href="{{ url_for('admin.users') }}"><i class="bi bi-people"></i> Users</a></li>
-  <li class="nav-item"><a class="nav-link {{ 'active' if p.startswith('/admin/coupons') }}" href="{{ url_for('admin.coupons') }}"><i class="bi bi-ticket-perforated"></i> Coupons</a></li>
-  <li class="nav-item"><a class="nav-link {{ 'active' if p.startswith('/admin/homepage') }}" href="{{ url_for('admin.homepage_sections') }}"><i class="bi bi-layout-text-window-reverse"></i> Homepage</a></li>
-  <li class="nav-item"><a class="nav-link {{ 'active' if p.startswith('/admin/content') }}" href="{{ url_for('admin.content_list') }}"><i class="bi bi-file-earmark-text"></i> Content</a></li>
-  <li class="nav-item"><a class="nav-link {{ 'active' if p.startswith('/admin/settings') }}" href="{{ url_for('admin.settings') }}"><i class="bi bi-gear"></i> Settings</a></li>
-</ul>
+{% macro link(endpoint, icon, label, active) -%}
+<li class="nav-item"><a class="nav-link {{ 'active' if active }}" href="{{ url_for(endpoint) }}"{% if active %} aria-current="page"{% endif %}><i class="bi {{ icon }}"></i> {{ label }}</a></li>
+{%- endmacro %}
+<div class="admin-nav-scroll">
+  <ul class="nav flex-column gap-1">
+    {{ link('admin.dashboard', 'bi-speedometer2', 'Dashboard', p == url_for('admin.dashboard')) }}
+  </ul>
+
+  <p class="admin-nav-heading">Catalog</p>
+  <ul class="nav flex-column gap-1">
+    {{ link('admin.categories', 'bi-diagram-3', 'Categories', p.startswith('/admin/categories')) }}
+    {{ link('admin.subcategories', 'bi-diagram-2', 'Subcategories', p.startswith('/admin/subcategories')) }}
+    {{ link('admin.products', 'bi-box-seam', 'Products', p.startswith('/admin/products')) }}
+    {{ link('admin.inventory', 'bi-clipboard-data', 'Inventory', p.startswith('/admin/inventory')) }}
+  </ul>
+
+  <p class="admin-nav-heading">Sales</p>
+  <ul class="nav flex-column gap-1">
+    {{ link('admin.orders', 'bi-receipt', 'Orders', p.startswith('/admin/orders')) }}
+    {{ link('admin.payments', 'bi-credit-card', 'Payments', p.startswith('/admin/payments') and not p.startswith('/admin/payments/settings')) }}
+    {{ link('admin.payment_settings', 'bi-sliders', 'Payment settings', p.startswith('/admin/payments/settings')) }}
+    {{ link('admin.coupons', 'bi-ticket-perforated', 'Coupons', p.startswith('/admin/coupons')) }}
+    {{ link('admin.users', 'bi-people', 'Users', p.startswith('/admin/users')) }}
+  </ul>
+
+  <p class="admin-nav-heading">Store design</p>
+  <ul class="nav flex-column gap-1">
+    {{ link('admin.storefront', 'bi-shop-window', 'Storefront', p.startswith('/admin/storefront')) }}
+    {{ link('admin.homepage_sections', 'bi-layout-text-window-reverse', 'Homepage', p.startswith('/admin/homepage')) }}
+    {{ link('admin.content_list', 'bi-file-earmark-text', 'Content', p.startswith('/admin/content')) }}
+    {{ link('admin.settings', 'bi-gear', 'Settings', p.startswith('/admin/settings')) }}
+  </ul>
+</div>

@@ -1,6 +1,6 @@
 import logging
 
-from flask import current_app, jsonify, render_template, request, url_for
+from flask import jsonify, render_template, request, url_for
 from flask_login import current_user, login_required
 from google.cloud import ndb
 
@@ -35,7 +35,7 @@ def pay(order_id):
     return render_template(
         "payment_checkout.html",
         order=order,
-        razorpay_key_id=current_app.config.get("RAZORPAY_KEY_ID"),
+        razorpay_key_id=RazorpayService.public_key_id(),
     )
 
 
@@ -60,7 +60,7 @@ def create_razorpay_order():
     return jsonify(
         {
             "success": True,
-            "key_id": current_app.config.get("RAZORPAY_KEY_ID"),
+            "key_id": RazorpayService.public_key_id(),
             "razorpay_order_id": result["razorpay_order_id"],
             "amount": result["amount_paise"],
             "currency": result["currency"],

@@ -1,39 +1,51 @@
 {% import "partials/brand.html" as b with context %}
 {% import "partials/google_button.html" as g %}
-<div class="trust-strip d-none d-md-block">
+{% if store.topbar_enabled %}
+<div class="sky-topbar d-none d-lg-block">
   <div class="container">
-    <span><i class="bi bi-truck"></i> Free delivery over ₹999</span>
-    <span><i class="bi bi-arrow-repeat"></i> 7-day easy returns</span>
-    <span><i class="bi bi-shield-check"></i> Secure payments via Razorpay</span>
-    <span><i class="bi bi-cash-coin"></i> Cash on delivery available</span>
+    <span class="sky-topbar-perks">
+      {% for icon, text in [("bi-truck", store.topbar_perk_1), ("bi-shield-check", store.topbar_perk_2), ("bi-cash-coin", store.topbar_perk_3)] if text %}
+      <span><i class="bi {{ icon }}"></i> {{ text }}</span>
+      {% endfor %}
+    </span>
+    <nav class="sky-topbar-links" aria-label="Quick links">
+      <a href="{{ url_for('shop.product_list', on_sale=1) }}"><i class="bi bi-tag-fill sky-topbar-promo"></i> Offers</a>
+      <a href="{{ url_for('checkout.my_orders') }}">Your Orders</a>
+      <a href="{{ url_for('shop.contact') }}">Help</a>
+    </nav>
   </div>
 </div>
-<header class="site-header sticky-top bg-white border-bottom">
+{% endif %}
+<header class="site-header sky-header sticky-top">
   <div class="container">
-    <nav class="navbar navbar-expand-lg py-2">
+    <nav class="navbar navbar-expand-lg py-2 py-lg-3">
       <button class="navbar-toggler nav-menu-btn me-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#mainNav" aria-controls="mainNav" aria-label="Open menu">
         <i class="bi bi-list"></i>
       </button>
 
-      <a class="navbar-brand fw-bold fs-4 text-primary d-flex align-items-center gap-2 me-auto me-lg-0" href="{{ url_for('shop.home') }}">
-        {{ b.brand() }}
+      <a class="navbar-brand fs-4 d-flex align-items-center gap-2 me-auto me-lg-4 order-lg-1" href="{{ url_for('shop.home') }}">
+        {{ b.brand(on_dark=True) }}
       </a>
 
-      <form class="d-none d-lg-flex flex-grow-1 mx-4" role="search" action="{{ url_for('shop.search') }}" method="get">
-        <div class="input-group">
-          <input type="search" name="q" class="form-control" placeholder="Search products..." value="{{ request.args.get('q', '') }}" aria-label="Search products">
-          <button class="btn btn-primary" type="submit"><i class="bi bi-search"></i></button>
-        </div>
+      <form class="sky-search d-none d-lg-flex order-lg-2" role="search" action="{{ url_for('shop.search') }}" method="get">
+        <i class="bi bi-search" aria-hidden="true"></i>
+        <input type="search" name="q" placeholder="Search products..." value="{{ request.args.get('q', '') }}" aria-label="Search products">
       </form>
 
-      <div class="d-flex align-items-center order-lg-3 gap-1 gap-md-3">
+      <div class="d-flex align-items-center order-lg-4 ms-lg-auto gap-1 gap-md-2">
         <button class="header-icon-btn d-lg-none" type="button" data-bs-toggle="collapse" data-bs-target="#mobileSearch" aria-controls="mobileSearch" aria-expanded="false" aria-label="Search">
           <i class="bi bi-search"></i>
         </button>
+
+        <a href="{{ url_for('cart.view_cart') }}" class="header-icon-btn text-decoration-none position-relative" aria-label="Cart">
+          <i class="bi bi-cart3"></i>
+          <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill sky-cart-badge cart-badge-count {{ 'd-none' if not cart_item_count }}">{{ cart_item_count }}</span>
+        </a>
+
         {% if current_user.is_authenticated %}
         <div class="dropdown">
-          <a class="header-icon-btn text-dark text-decoration-none dropdown-toggle d-flex align-items-center gap-1" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Account">
-            <i class="bi bi-person-circle"></i> <span class="d-none d-md-inline fs-6">{{ current_user.name.split(' ')[0] }}</span>
+          <a class="sky-account-btn dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Account">
+            <i class="bi bi-person-circle"></i> <span class="d-none d-md-inline">{{ current_user.name.split(' ')[0] }}</span>
           </a>
           <ul class="dropdown-menu dropdown-menu-end">
             <li><a class="dropdown-item" href="{{ url_for('auth.profile') }}"><i class="bi bi-person"></i> My profile</a></li>
@@ -48,8 +60,8 @@
         </div>
         {% else %}
         <div class="dropdown">
-          <a class="header-icon-btn text-dark text-decoration-none dropdown-toggle d-flex align-items-center gap-1" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Login">
-            <i class="bi bi-person-circle"></i> <span class="d-none d-md-inline fs-6">Login</span>
+          <a class="btn sky-btn-login dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="bi bi-person-circle d-md-none"></i><span class="d-none d-md-inline">Login</span>
           </a>
           <div class="dropdown-menu dropdown-menu-end login-menu p-3">
             <p class="fw-semibold mb-1">Welcome</p>
@@ -62,26 +74,20 @@
             <a href="{{ url_for('auth.register') }}" class="btn btn-outline-secondary w-100">Create account</a>
           </div>
         </div>
+        <a href="{{ url_for('auth.register') }}" class="btn sky-btn-register d-none d-md-inline-flex">Register</a>
         {% endif %}
-
-        <a href="{{ url_for('cart.view_cart') }}" class="header-icon-btn text-dark text-decoration-none position-relative d-none d-md-inline-flex" aria-label="Cart">
-          <i class="bi bi-cart3"></i>
-          <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-primary cart-badge-count {{ 'd-none' if not cart_item_count }}">{{ cart_item_count }}</span>
-        </a>
       </div>
 
       {# Mobile: search row that drops down under the header #}
       <div class="collapse w-100 d-lg-none" id="mobileSearch">
-        <form class="pt-2 pb-1" role="search" action="{{ url_for('shop.search') }}" method="get">
-          <div class="input-group">
-            <input type="search" name="q" class="form-control" placeholder="Search products..." value="{{ request.args.get('q', '') }}" aria-label="Search products">
-            <button class="btn btn-primary" type="submit"><i class="bi bi-search"></i></button>
-          </div>
+        <form class="sky-search mt-2 mb-1" role="search" action="{{ url_for('shop.search') }}" method="get">
+          <i class="bi bi-search" aria-hidden="true"></i>
+          <input type="search" name="q" placeholder="Search products..." value="{{ request.args.get('q', '') }}" aria-label="Search products">
         </form>
       </div>
 
-      {# Below lg this is a slide-in drawer; on desktop Bootstrap renders it inline as the category row #}
-      <div class="offcanvas offcanvas-start nav-drawer" tabindex="-1" id="mainNav" aria-labelledby="mainNavLabel">
+      {# Below lg this is a slide-in drawer; on desktop Bootstrap renders it inline next to the search #}
+      <div class="offcanvas offcanvas-start nav-drawer order-lg-3" tabindex="-1" id="mainNav" aria-labelledby="mainNavLabel">
         <div class="offcanvas-header">
           <span class="offcanvas-title navbar-brand fs-5 d-flex align-items-center gap-2" id="mainNavLabel">{{ b.brand() }}</span>
           <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close menu"></button>
@@ -95,9 +101,10 @@
           </form>
 
           <p class="nav-drawer-heading d-lg-none">Shop by category</p>
-          <ul class="navbar-nav category-nav flex-row flex-wrap gap-2 gap-lg-4">
+          <ul class="navbar-nav category-nav flex-row flex-wrap gap-2 gap-lg-4 ms-lg-4">
             {% for category in nav_categories %}
-            <li class="nav-item">
+            {# Desktop header has room for four; the drawer lists them all #}
+            <li class="nav-item{{ ' d-lg-none' if loop.index > 4 }}">
               <a class="nav-link px-0" href="{{ url_for('shop.category_detail', category_slug=category.slug) }}">{{ category.name }}<i class="bi bi-chevron-right d-lg-none"></i></a>
             </li>
             {% endfor %}
@@ -130,7 +137,7 @@
           </div>
 
           <div class="nav-drawer-trust d-lg-none mt-4">
-            <span><i class="bi bi-truck"></i> Free delivery over ₹999</span>
+            <span><i class="bi bi-truck"></i> Free delivery over ₹{{ store.free_delivery }}</span>
             <span><i class="bi bi-arrow-repeat"></i> 7-day easy returns</span>
             <span><i class="bi bi-shield-check"></i> Secure payments</span>
           </div>

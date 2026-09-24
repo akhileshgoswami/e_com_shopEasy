@@ -12,9 +12,11 @@ from app.admin.forms import (
     CategoryForm,
     CouponForm,
     OrderStatusForm,
+    PaymentSettingsForm,
     ProductForm,
     ProductImageForm,
     SiteContentForm,
+    StorefrontForm,
     StockUpdateForm,
     SubcategoryForm,
     UserEditForm,
@@ -449,6 +451,49 @@ def payments():
     return render_template("admin/payments_list.html", pagination=pagination, payments=pagination.items, status=status)
 
 
+@admin_bp.route("/payments/settings", methods=["GET", "POST"])
+@admin_required
+def payment_settings():
+    from app.services.payment_settings_service import PaymentSettingsError, PaymentSettingsService, mask
+
+    settings = PaymentSettingsService.get()
+    form = PaymentSettingsForm()
+    if request.method == "GET":
+        form.cod_enabled.data = settings["cod_enabled"]
+        form.razorpay_enabled.data = settings["razorpay_enabled"]
+        form.razorpay_key_id.data = settings["razorpay_key_id"] if settings["razorpay_key_id_source"] == "admin" else ""
+
+    if form.validate_on_submit():
+        try:
+            _settings, warning = PaymentSettingsService.update(
+                razorpay_enabled=form.razorpay_enabled.data,
+                cod_enabled=form.cod_enabled.data,
+                key_id=form.razorpay_key_id.data,
+                key_secret=form.razorpay_key_secret.data,
+                webhook_secret=form.razorpay_webhook_secret.data,
+                clear_secrets=form.clear_saved_keys.data,
+            )
+        except PaymentSettingsError as exc:
+            flash(str(exc), "danger")
+        else:
+            flash("Payment settings saved.", "success")
+            if warning:
+                flash(warning, "warning")
+            return redirect(url_for("admin.payment_settings"))
+
+    return render_template(
+        "admin/payment_settings.html",
+        form=form,
+        settings=settings,
+        masked={
+            "key_id": settings["razorpay_key_id"],
+            "key_secret": mask(settings["razorpay_key_secret"]),
+            "webhook_secret": mask(settings["razorpay_webhook_secret"]),
+        },
+        webhook_url=url_for("payments.razorpay_webhook", _external=True),
+    )
+
+
 # ---------- Users ----------
 
 @admin_bp.route("/users")
@@ -563,10 +608,6 @@ def settings():
         "Storage backend": "Google Cloud Storage" if current_app.config.get("GCS_ENABLED") else "Local filesystem",
         "GCS bucket": current_app.config.get("GCS_BUCKET_NAME") or "-",
         "Email delivery": "Enabled" if current_app.config.get("MAIL_ENABLED") else "Disabled (logged only)",
-        "Razorpay configured": bool(current_app.config.get("RAZORPAY_KEY_ID")),
-        "Free shipping threshold": current_app.config.get("FREE_SHIPPING_THRESHOLD"),
-        "Default shipping charge": current_app.config.get("DEFAULT_SHIPPING_CHARGE"),
-        "Tax rate (%)": current_app.config.get("TAX_RATE_PERCENT"),
     }
     banner = HeroBannerService.get()
     banner_form = HeroBannerForm(prefix="banner")
@@ -614,6 +655,35 @@ def settings_banner():
     except UnsupportedFileError as exc:
         flash(str(exc), "danger")
     return redirect(url_for("admin.settings"))
+
+
+# ---------- Storefront (CTA colour, homepage copy/toggles, shipping & tax) ----------
+
+@admin_bp.route("/storefront", methods=["GET", "POST"])
+@admin_required
+def storefront():
+    from decimal import Decimal
+
+    from app.services.site_content_service import STOREFRONT_DEFAULTS, StorefrontService
+
+    form = StorefrontForm()
+    if request.method == "GET":
+        raw = StorefrontService.raw()
+        for key in STOREFRONT_DEFAULTS:
+            field = getattr(form, key)
+            if field.type == "BooleanField":
+                field.data = raw[key] == "1"
+            elif field.type == "DecimalField":
+                field.data = Decimal(raw[key])
+            else:
+                field.data = raw[key]
+
+    if form.validate_on_submit():
+        StorefrontService.update({key: getattr(form, key).data for key in STOREFRONT_DEFAULTS})
+        flash("Storefront updated.", "success")
+        return redirect(url_for("admin.storefront"))
+
+    return render_template("admin/storefront.html", form=form)
 
 
 # ---------- Homepage sections (Featured / Trending / On sale / New arrivals) ----------

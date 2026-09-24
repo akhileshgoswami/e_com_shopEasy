@@ -1,0 +1,114 @@
+{% extends "admin/base.html" %}
+{% block title %}Storefront - Admin{% endblock %}
+
+{% macro text(field, hint=None) %}
+<div class="mb-3">
+  <label for="{{ field.id }}" class="form-label fw-semibold">{{ field.label.text }}</label>
+  {{ field(class="form-control" ~ (" is-invalid" if field.errors else "")) }}
+  {% for error in field.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+  {% if hint %}<div class="form-text">{{ hint }}</div>{% endif %}
+</div>
+{% endmacro %}
+
+{% macro switch(field, hint=None) %}
+<div class="form-check form-switch mb-3">
+  {{ field(class="form-check-input", role="switch") }}
+  <label class="form-check-label fw-semibold" for="{{ field.id }}">{{ field.label.text }}</label>
+  {% if hint %}<div class="form-text mt-0">{{ hint }}</div>{% endif %}
+</div>
+{% endmacro %}
+
+{% block admin_content %}
+<h1 class="h3 mb-1">Storefront</h1>
+<p class="text-muted mb-4">Everything customers see besides products. Logo, site name, main theme colour, fonts and the banner title/image are under
+  <a href="{{ url_for('admin.settings') }}">Settings</a>; product rows are under <a href="{{ url_for('admin.homepage_sections') }}">Homepage</a>.
+  In any text you can write <code>{free_delivery}</code> to show the current free-delivery amount.</p>
+
+<form method="post" style="max-width: 760px;">
+  {{ form.hidden_tag() }}
+
+  <div class="card mb-4">
+    <div class="card-header bg-white fw-semibold"><i class="bi bi-palette"></i> Colour</div>
+    <div class="card-body">
+      <label for="{{ form.accent_color.id }}" class="form-label fw-semibold">{{ form.accent_color.label.text }}</label>
+      <div class="d-flex align-items-center gap-2">
+        <input type="color" id="accentPicker" class="form-control form-control-color" value="{{ form.accent_color.data or '#ff5a5f' }}" title="Pick a color">
+        {{ form.accent_color(class="form-control" ~ (" is-invalid" if form.accent_color.errors else ""), style="max-width: 140px;", maxlength=7) }}
+      </div>
+      {% for error in form.accent_color.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+      <div class="form-text">Register button, banner button, sale badges, offer strip and cart count. The main colour is set in Settings.</div>
+    </div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-header bg-white fw-semibold"><i class="bi bi-truck"></i> Shipping &amp; tax</div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-4">{{ text(form.free_shipping_threshold) }}</div>
+        <div class="col-md-4">{{ text(form.shipping_charge) }}</div>
+        <div class="col-md-4">{{ text(form.tax_rate_percent) }}</div>
+      </div>
+      <div class="form-text mt-0">Used at checkout for every new order. Orders already placed keep the charges they were placed with.</div>
+    </div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-header bg-white fw-semibold"><i class="bi bi-layout-three-columns"></i> Top bar</div>
+    <div class="card-body">
+      {{ switch(form.topbar_enabled, "Thin strip above the header on desktop.") }}
+      <div class="row g-3">
+        <div class="col-md-4">{{ text(form.topbar_perk_1) }}</div>
+        <div class="col-md-4">{{ text(form.topbar_perk_2) }}</div>
+        <div class="col-md-4">{{ text(form.topbar_perk_3) }}</div>
+      </div>
+      <div class="form-text mt-0">Leave an item empty to hide it.</div>
+    </div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-header bg-white fw-semibold"><i class="bi bi-image"></i> Homepage banner extras</div>
+    <div class="card-body">
+      {{ switch(form.hero_collage_enabled, "Shows your first four categories as tiles on the right (desktop and tablet).") }}
+      {{ text(form.hero_secondary_text, "Button that opens on-sale products. Leave empty to hide.") }}
+      <div class="row g-3">
+        <div class="col-md-4">{{ text(form.hero_perk_1) }}</div>
+        <div class="col-md-4">{{ text(form.hero_perk_2) }}</div>
+        <div class="col-md-4">{{ text(form.hero_perk_3) }}</div>
+      </div>
+      {{ text(form.hero_sticker, "Small tilted label on the category tiles. Leave empty to hide.") }}
+    </div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-header bg-white fw-semibold"><i class="bi bi-search"></i> Product finder</div>
+    <div class="card-body">
+      {{ switch(form.finder_enabled, "The search card below the banner.") }}
+      <div class="row g-3">
+        <div class="col-md-6">{{ text(form.finder_title) }}</div>
+        <div class="col-md-6">{{ text(form.finder_placeholder) }}</div>
+        <div class="col-md-6">{{ text(form.finder_button) }}</div>
+        <div class="col-md-6">{{ text(form.finder_deals_label) }}</div>
+      </div>
+      <hr>
+      {{ switch(form.coupon_enabled, "Dashed offer strip at the bottom of the finder.") }}
+      {{ text(form.coupon_text) }}
+      {{ text(form.coupon_link_text) }}
+    </div>
+  </div>
+
+  <button type="submit" class="btn btn-primary">Save storefront</button>
+</form>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  var picker = document.getElementById("accentPicker");
+  var text = document.getElementById("{{ form.accent_color.id }}");
+  picker.addEventListener("input", function () { text.value = picker.value; });
+  text.addEventListener("input", function () {
+    if (/^#[0-9a-fA-F]{6}$/.test(text.value)) picker.value = text.value;
+  });
+})();
+</script>
+{% endblock %}

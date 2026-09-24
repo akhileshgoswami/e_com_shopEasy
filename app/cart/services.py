@@ -116,8 +116,10 @@ class CartService:
         return messages
 
     @staticmethod
-    def get_totals(cart):
-        items = cart.items
+    def get_totals(cart, items=None):
+        """Pass the items already being rendered so the totals and the
+        listed lines always come from the same read."""
+        items = cart.items if items is None else items
         subtotal = sum((item.subtotal for item in items), Decimal("0.00"))
         item_count = sum(item.quantity for item in items)
         return {"subtotal": subtotal, "item_count": item_count}

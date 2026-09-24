@@ -4,7 +4,7 @@
 <div class="container py-4">
   <h1 class="h3 mb-4">Your cart</h1>
 
-  {% if not cart.items %}
+  {% if not items %}
   <div class="text-center py-5">
     <i class="bi bi-cart-x display-1 text-muted"></i>
     <p class="text-muted mt-3">Your cart is empty.</p>
@@ -15,7 +15,7 @@
     <div class="col-lg-8">
       <div class="card">
         <div class="list-group list-group-flush">
-          {% for item in cart.items %}
+          {% for item in items %}
           <div class="list-group-item cart-item-row">
             <div class="d-flex gap-3 align-items-center">
               <img src="{{ item.product.image_url or url_for('static', filename='images/placeholder.svg') }}" alt="{{ item.product.name }}">
@@ -24,10 +24,10 @@
                 <p class="mb-1 small text-muted">₹{{ '%.2f'|format(item.unit_price) }} each</p>
                 <form action="{{ url_for('cart.update_item', item_id=item.id) }}" method="post" class="d-flex align-items-center gap-2">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <div class="input-group input-group-sm" style="width: 120px;">
-                    <button class="btn btn-outline-secondary" type="button" onclick="const i=this.nextElementSibling; if(i.value>1){i.stepDown(); this.form.submit();}">-</button>
+                  <div class="input-group input-group-sm qty-stepper" style="width: 120px;">
+                    <button class="btn btn-outline-secondary" type="button" aria-label="Decrease quantity" onclick="const i=this.nextElementSibling; if(i.value>1){i.stepDown(); this.form.submit();}">-</button>
                     <input type="number" name="quantity" value="{{ item.quantity }}" min="1" max="{{ item.product.stock_quantity }}" class="form-control text-center" onchange="this.form.submit()">
-                    <button class="btn btn-outline-secondary" type="button" onclick="const i=this.previousElementSibling; i.stepUp(); this.form.submit();">+</button>
+                    <button class="btn btn-outline-secondary" type="button" aria-label="Increase quantity" onclick="const i=this.previousElementSibling; i.stepUp(); this.form.submit();">+</button>
                   </div>
                 </form>
               </div>

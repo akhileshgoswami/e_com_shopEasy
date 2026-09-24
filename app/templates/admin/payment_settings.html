@@ -1,0 +1,89 @@
+{% extends "admin/base.html" %}
+{% block title %}Payment settings - Admin{% endblock %}
+
+{% macro source_badge(source) %}
+{%- if source == "admin" -%}<span class="badge text-bg-primary">Saved here</span>
+{%- elif source == "env" -%}<span class="badge text-bg-secondary">Server default</span>
+{%- else -%}<span class="badge text-bg-warning">Not set</span>{%- endif -%}
+{% endmacro %}
+
+{% block admin_content %}
+<h1 class="h3 mb-1">Payment settings</h1>
+<p class="text-muted mb-4">Choose what customers can pay with and manage your Razorpay keys. Changes apply to the next checkout; no redeploy needed.</p>
+
+<form method="post" autocomplete="off" style="max-width: 760px;">
+  {{ form.hidden_tag() }}
+
+  <div class="card mb-4">
+    <div class="card-header bg-white fw-semibold"><i class="bi bi-toggles"></i> Payment methods at checkout</div>
+    <div class="card-body">
+      <div class="form-check form-switch mb-3">
+        {{ form.cod_enabled(class="form-check-input", role="switch") }}
+        <label class="form-check-label fw-semibold" for="{{ form.cod_enabled.id }}">{{ form.cod_enabled.label.text }}</label>
+      </div>
+      <div class="form-check form-switch">
+        {{ form.razorpay_enabled(class="form-check-input", role="switch") }}
+        <label class="form-check-label fw-semibold" for="{{ form.razorpay_enabled.id }}">{{ form.razorpay_enabled.label.text }}</label>
+        <div class="form-text mt-0">
+          {% if settings.razorpay_available %}
+          Live at checkout{% if settings.razorpay_mode %} in <strong>{{ settings.razorpay_mode }}</strong> mode{% endif %}.
+          {% elif settings.razorpay_enabled %}
+          <span class="text-danger">Enabled but hidden at checkout — Key ID and Key Secret are both required.</span>
+          {% else %}
+          Hidden at checkout.
+          {% endif %}
+        </div>
+      </div>
+      <div class="form-text mt-3">At least one method must stay on.</div>
+    </div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
+      <span><i class="bi bi-key"></i> Razorpay keys</span>
+      {% if settings.razorpay_mode == "live" %}<span class="badge text-bg-success">LIVE keys</span>
+      {% elif settings.razorpay_mode == "test" %}<span class="badge text-bg-warning">TEST keys</span>{% endif %}
+    </div>
+    <div class="card-body">
+      <div class="table-responsive mb-3">
+        <table class="table table-sm align-middle mb-0">
+          <thead><tr><th>Currently active</th><th>Value</th><th>Source</th></tr></thead>
+          <tbody>
+            <tr><td>Key ID</td><td><code>{{ masked.key_id or "—" }}</code></td><td>{{ source_badge(settings.razorpay_key_id_source) }}</td></tr>
+            <tr><td>Key Secret</td><td><code>{{ masked.key_secret or "—" }}</code></td><td>{{ source_badge(settings.razorpay_key_secret_source) }}</td></tr>
+            <tr><td>Webhook Secret</td><td><code>{{ masked.webhook_secret or "—" }}</code></td><td>{{ source_badge(settings.razorpay_webhook_secret_source) }}</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="small text-muted">Get keys from <a href="https://dashboard.razorpay.com/app/keys" target="_blank" rel="noopener">Razorpay Dashboard → Settings → API Keys</a>.
+        Test keys start with <code>rzp_test_</code>, live keys with <code>rzp_live_</code>. Secrets are stored encrypted and never shown again.</p>
+
+      <div class="mb-3">
+        <label for="{{ form.razorpay_key_id.id }}" class="form-label fw-semibold">{{ form.razorpay_key_id.label.text }}</label>
+        {{ form.razorpay_key_id(class="form-control font-monospace", placeholder="rzp_test_… or rzp_live_…", spellcheck="false") }}
+        <div class="form-text">Leave empty to use the server default.</div>
+      </div>
+      <div class="mb-3">
+        <label for="{{ form.razorpay_key_secret.id }}" class="form-label fw-semibold">{{ form.razorpay_key_secret.label.text }}</label>
+        {{ form.razorpay_key_secret(class="form-control font-monospace", placeholder="Leave empty to keep the current secret", autocomplete="new-password") }}
+      </div>
+      <div class="mb-3">
+        <label for="{{ form.razorpay_webhook_secret.id }}" class="form-label fw-semibold">{{ form.razorpay_webhook_secret.label.text }}</label>
+        {{ form.razorpay_webhook_secret(class="form-control font-monospace", placeholder="Leave empty to keep the current secret", autocomplete="new-password") }}
+        <div class="form-text">In Razorpay → Settings → Webhooks, add <code>{{ webhook_url }}</code> with events <code>payment.captured</code>, <code>payment.failed</code>, and paste its secret here.</div>
+      </div>
+      <div class="form-check">
+        {{ form.clear_saved_keys(class="form-check-input") }}
+        <label class="form-check-label" for="{{ form.clear_saved_keys.id }}">{{ form.clear_saved_keys.label.text }}</label>
+      </div>
+    </div>
+  </div>
+
+  <div class="alert alert-warning small" style="max-width: 760px;">
+    <i class="bi bi-exclamation-triangle"></i> Switching between test and live keys only affects new payments. Orders already waiting for payment keep their old Razorpay order and may need to be placed again.
+  </div>
+
+  <button type="submit" class="btn btn-primary">Save payment settings</button>
+</form>
+{% endblock %}

@@ -6,6 +6,7 @@ from flask import current_app
 from google.cloud import ndb
 
 from app.models import Payment
+from app.services.payment_settings_service import PaymentSettingsService
 
 logger = logging.getLogger("app.payments.razorpay")
 
@@ -17,11 +18,15 @@ class RazorpayError(Exception):
 class RazorpayService:
     @staticmethod
     def _client():
-        key_id = current_app.config.get("RAZORPAY_KEY_ID")
-        key_secret = current_app.config.get("RAZORPAY_KEY_SECRET")
-        if not key_id or not key_secret:
+        settings = PaymentSettingsService.get()
+        if not settings["razorpay_configured"]:
             raise RazorpayError("Razorpay is not configured on this server.")
-        return razorpay.Client(auth=(key_id, key_secret))
+        return razorpay.Client(auth=(settings["razorpay_key_id"], settings["razorpay_key_secret"]))
+
+    @staticmethod
+    def public_key_id():
+        """Key ID for the browser checkout widget (never the secret)."""
+        return PaymentSettingsService.get()["razorpay_key_id"]
 
     @classmethod
     def create_order(cls, order):
@@ -90,7 +95,7 @@ class RazorpayService:
 
     @classmethod
     def verify_webhook_signature(cls, raw_body, signature):
-        secret = current_app.config.get("RAZORPAY_WEBHOOK_SECRET")
+        secret = PaymentSettingsService.get()["razorpay_webhook_secret"]
         if not secret:
             raise RazorpayError("Razorpay webhook secret is not configured.")
         client = cls._client()

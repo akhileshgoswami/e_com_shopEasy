@@ -10,8 +10,10 @@
 
   function handleAddToCartForm(form) {
     form.addEventListener("submit", function (event) {
+      // "Buy now" shares the form but must navigate to checkout normally.
+      if (event.submitter && event.submitter.hasAttribute("data-buy-now")) return;
       event.preventDefault();
-      const button = form.querySelector("button[type=submit]");
+      const button = event.submitter || form.querySelector("button[type=submit]");
       const originalHtml = button ? button.innerHTML : null;
       if (button) {
         button.disabled = true;
@@ -82,3 +84,30 @@
 
   window.shopUtils = { showToast, updateCartBadges };
 })();
+
+// Home "finder": category tabs pick the category in the search card, like
+// switching product type before searching.
+document.addEventListener("DOMContentLoaded", function () {
+  var finder = document.querySelector(".sky-finder");
+  if (!finder) return;
+  var select = finder.querySelector(".sky-category-select");
+  var tabs = finder.querySelectorAll(".sky-tab[data-category]");
+
+  function activate(slug) {
+    tabs.forEach(function (tab) {
+      var on = tab.dataset.category === slug;
+      tab.classList.toggle("active", on);
+      tab.setAttribute("aria-selected", on ? "true" : "false");
+    });
+  }
+
+  tabs.forEach(function (tab) {
+    tab.addEventListener("click", function () {
+      activate(tab.dataset.category);
+      if (select) select.value = tab.dataset.category;
+    });
+  });
+  if (select) {
+    select.addEventListener("change", function () { activate(select.value); });
+  }
+});

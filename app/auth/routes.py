@@ -4,7 +4,7 @@ from flask import abort, current_app, flash, redirect, render_template, request,
 from flask_login import current_user, login_required, login_user, logout_user
 
 from app.auth import auth_bp
-from app.cart.routes import PENDING_CART_SESSION_KEY
+from app.cart.routes import BUY_NOW_SESSION_KEY, PENDING_CART_SESSION_KEY
 from app.cart.services import CartError, CartService
 from app.auth.forms import (
     AddressForm,
@@ -30,6 +30,9 @@ def _apply_pending_cart_action():
     pending = session.pop(PENDING_CART_SESSION_KEY, None)
     if not pending:
         return None
+    if pending.get("buy_now"):
+        session[BUY_NOW_SESSION_KEY] = {"product_id": pending["product_id"], "quantity": pending.get("quantity", 1)}
+        return url_for("checkout.checkout")
     try:
         CartService.add_item(current_user, pending["product_id"], pending.get("quantity", 1))
         flash("Item added to your cart.", "success")

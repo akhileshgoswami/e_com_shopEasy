@@ -202,7 +202,7 @@ def test_admin_can_change_fonts(client, admin_user):
     admin_login(client, admin_user.email)
 
     resp = client.get("/")
-    assert b"@fontsource/fraunces@5/700.css" in resp.data
+    assert b"@fontsource/poppins@5/700.css" in resp.data
     assert b"@fontsource/inter@5/400.css" in resp.data
 
     resp = client.post(

@@ -134,3 +134,12 @@ def test_invalid_status_transition_rejected(client, admin_user, customer, produc
     assert resp.status_code == 200
     order = reload(order)
     assert order.order_status == OrderStatus.PLACED
+
+
+def test_checkout_page_renders_cart_lines(client, customer, product, address):
+    login(client, customer.email)
+    client.post("/cart/add", data={"product_id": product.id, "quantity": 2})
+
+    resp = client.get("/checkout")
+    assert resp.status_code == 200
+    assert product.name.encode() in resp.data

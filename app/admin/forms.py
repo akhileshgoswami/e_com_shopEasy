@@ -119,3 +119,49 @@ class HomeSectionsForm(FlaskForm):
     # Serialized by the admin page's JS; normalized server-side by
     # HomeSectionsService, so malformed input can't break the homepage.
     sections_json = HiddenField("Sections", validators=[DataRequired()])
+
+
+class StorefrontForm(FlaskForm):
+    """Customer-facing copy, toggles, CTA colour and shipping/tax rules.
+    Field names match StorefrontService keys. Text may use {free_delivery}."""
+
+    accent_color = StringField(
+        "Call-to-action color",
+        validators=[DataRequired(), Regexp(r"^#[0-9a-fA-F]{6}$", message="Use a hex color like #ff5a5f.")],
+    )
+
+    free_shipping_threshold = DecimalField("Free delivery above (₹)", places=2, validators=[InputRequired(), NumberRange(min=0)])
+    shipping_charge = DecimalField("Shipping charge (₹)", places=2, validators=[InputRequired(), NumberRange(min=0)])
+    tax_rate_percent = DecimalField("Tax rate (%)", places=2, validators=[InputRequired(), NumberRange(min=0, max=100)])
+
+    topbar_enabled = BooleanField("Show top bar")
+    topbar_perk_1 = StringField("Top bar item 1", validators=[Optional(), Length(max=60)])
+    topbar_perk_2 = StringField("Top bar item 2", validators=[Optional(), Length(max=60)])
+    topbar_perk_3 = StringField("Top bar item 3", validators=[Optional(), Length(max=60)])
+
+    hero_secondary_text = StringField("Second button text", validators=[Optional(), Length(max=40)])
+    hero_perk_1 = StringField("Perk 1", validators=[Optional(), Length(max=60)])
+    hero_perk_2 = StringField("Perk 2", validators=[Optional(), Length(max=60)])
+    hero_perk_3 = StringField("Perk 3", validators=[Optional(), Length(max=60)])
+    hero_sticker = StringField("Sticker text", validators=[Optional(), Length(max=40)])
+    hero_collage_enabled = BooleanField("Show category tiles next to the banner")
+
+    finder_enabled = BooleanField("Show product finder")
+    finder_title = StringField("Finder heading", validators=[Optional(), Length(max=60)])
+    finder_placeholder = StringField("Search placeholder", validators=[Optional(), Length(max=80)])
+    finder_button = StringField("Search button text", validators=[Optional(), Length(max=30)])
+    finder_deals_label = StringField("Deals switch label", validators=[Optional(), Length(max=30)])
+    coupon_enabled = BooleanField("Show offer strip")
+    coupon_text = StringField("Offer strip text", validators=[Optional(), Length(max=160)])
+    coupon_link_text = StringField("Offer strip link text", validators=[Optional(), Length(max=30)])
+
+
+class PaymentSettingsForm(FlaskForm):
+    """Secrets are write-only: blank means "keep the current value"."""
+
+    cod_enabled = BooleanField("Cash on delivery")
+    razorpay_enabled = BooleanField("Razorpay (UPI, cards, netbanking)")
+    razorpay_key_id = StringField("Key ID", validators=[Optional(), Length(max=64)])
+    razorpay_key_secret = PasswordField("Key Secret", validators=[Optional(), Length(max=128)])
+    razorpay_webhook_secret = PasswordField("Webhook Secret", validators=[Optional(), Length(max=128)])
+    clear_saved_keys = BooleanField("Remove the keys saved here and use the server's default keys")

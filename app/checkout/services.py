@@ -4,11 +4,11 @@ import string
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from flask import current_app
 from google.cloud import ndb
 
 from app.cart.services import CartService
 from app.models import (
+    CartItem,
     Coupon,
     Order,
     OrderItem,
@@ -22,6 +22,8 @@ from app.models import (
 from app.services.coupon_service import CouponError, CouponService
 from app.services.email_service import EmailService
 from app.services.inventory_service import InsufficientStockError, InventoryService
+from app.services.payment_settings_service import PaymentSettingsService
+from app.services.site_content_service import StorefrontService
 
 logger = logging.getLogger("app.checkout")
 
@@ -40,14 +42,37 @@ def _generate_order_number():
     raise CheckoutError("Could not generate a unique order number, please retry.")
 
 
+def _buy_now_line(user, buy_now):
+    """A single unsaved cart line for "Buy now", re-validated against live
+    product state like sync_cart() does for real cart lines. Returns
+    (items, adjustment_messages)."""
+    product = Product.find(buy_now.get("product_id"))
+    if product is None or not product.is_active:
+        return [], ["This product is no longer available."]
+    if product.stock_quantity <= 0:
+        return [], [f"'{product.name}' is out of stock."]
+    quantity = max(1, int(buy_now.get("quantity") or 1))
+    messages = []
+    if quantity > product.stock_quantity:
+        messages.append(f"Quantity for '{product.name}' was reduced to {product.stock_quantity} (limited stock).")
+        quantity = product.stock_quantity
+    line = CartItem(cart_id=user.id, product_id=product.id, quantity=quantity, unit_price=product.effective_price)
+    return [line], messages
+
+
 class CheckoutService:
     @staticmethod
-    def build_summary(user, coupon_code=None):
+    def build_summary(user, coupon_code=None, buy_now=None):
         """Read-only server-side computation used to render the checkout page.
-        Never trusts any client-provided price."""
+        Never trusts any client-provided price. With buy_now
+        ({"product_id", "quantity"}) only that product is checked out and
+        the cart is left alone."""
         cart = CartService.get_or_create_cart(user)
-        adjustments = CartService.sync_cart(cart)
-        items = cart.items
+        if buy_now:
+            items, adjustments = _buy_now_line(user, buy_now)
+        else:
+            adjustments = CartService.sync_cart(cart)
+            items = cart.items
 
         subtotal = sum((item.subtotal for item in items), Decimal("0.00"))
 
@@ -67,7 +92,8 @@ class CheckoutService:
 
         return {
             "cart": cart,
-            "items": items,
+            "cart_items": items,
+            "buy_now": bool(buy_now),
             "adjustments": adjustments,
             "subtotal": subtotal,
             "discount": discount,
@@ -80,24 +106,26 @@ class CheckoutService:
 
     @staticmethod
     def _shipping_charge(taxable_subtotal):
-        threshold = Decimal(str(current_app.config["FREE_SHIPPING_THRESHOLD"]))
-        if taxable_subtotal >= threshold:
+        rules = StorefrontService.get()
+        if taxable_subtotal >= rules["free_shipping_threshold"]:
             return Decimal("0.00")
-        return Decimal(str(current_app.config["DEFAULT_SHIPPING_CHARGE"]))
+        return rules["shipping_charge"]
 
     @staticmethod
     def _tax(taxable_subtotal):
-        rate = Decimal(str(current_app.config["TAX_RATE_PERCENT"]))
+        rate = StorefrontService.get()["tax_rate_percent"]
         return (taxable_subtotal * rate / Decimal("100")).quantize(Decimal("0.01"))
 
     @classmethod
-    def create_order(cls, user, address, payment_method, coupon_code=None, notes=None):
-        if payment_method not in PaymentMethod.CHOICES:
-            raise CheckoutError("Invalid payment method.")
+    def create_order(cls, user, address, payment_method, coupon_code=None, notes=None, buy_now=None):
+        if payment_method not in PaymentSettingsService.enabled_methods():
+            raise CheckoutError("This payment method is not available right now.")
 
-        summary = cls.build_summary(user, coupon_code=coupon_code)
-        cart_items = summary["items"]
+        summary = cls.build_summary(user, coupon_code=coupon_code, buy_now=buy_now)
+        cart_items = summary["cart_items"]
         if not cart_items:
+            if buy_now and summary["adjustments"]:
+                raise CheckoutError(summary["adjustments"][0])
             raise CheckoutError("Your cart is empty.")
         if summary["coupon_error"]:
             raise CheckoutError(summary["coupon_error"])
@@ -183,7 +211,8 @@ class CheckoutService:
                 to_put.append(fresh_coupon)
 
             ndb.put_multi(to_put)
-            ndb.delete_multi([item.key for item in cart_items])
+            # Buy-now lines were never saved, so the rest of the cart stays put.
+            ndb.delete_multi([item.key for item in cart_items if item.key])
             return order
 
         try:

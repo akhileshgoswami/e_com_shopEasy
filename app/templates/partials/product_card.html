@@ -25,9 +25,18 @@
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="product_id" value="{{ product.id }}">
           <input type="hidden" name="quantity" value="1">
-          <button type="submit" class="btn btn-primary btn-sm w-100" {{ 'disabled' if not product.in_stock }}>
-            <i class="bi bi-cart-plus"></i> {{ 'Add to cart' if product.in_stock else 'Out of stock' }}
-          </button>
+          {% if product.in_stock %}
+          <div class="card-actions">
+            <button type="submit" class="btn btn-outline-primary btn-sm card-add-btn" aria-label="Add {{ product.name }} to cart" title="Add to cart">
+              <i class="bi bi-cart-plus"></i>
+            </button>
+            <button type="submit" class="btn btn-primary btn-sm flex-grow-1" formaction="{{ url_for('cart.buy_now') }}" data-buy-now>
+              Buy now
+            </button>
+          </div>
+          {% else %}
+          <button type="button" class="btn btn-primary btn-sm w-100" disabled>Out of stock</button>
+          {% endif %}
         </form>
       </div>
     </div>
