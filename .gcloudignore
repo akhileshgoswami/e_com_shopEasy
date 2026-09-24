@@ -1,0 +1,8 @@
+# Files excluded from `gcloud run deploy --source` uploads (scripts/deploy.sh).
+.gcloudignore
+.git
+.gitignore
+#!include:.gitignore
+scratchpad/
+terraform/
+tests/

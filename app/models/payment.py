@@ -1,6 +1,6 @@
-from datetime import datetime, timezone
+from google.cloud import ndb
 
-from app.extensions import db
+from app.models.base import BaseModel, DecimalProperty, UTCDateTimeProperty
 
 
 class PaymentProvider:
@@ -8,44 +8,43 @@ class PaymentProvider:
     COD = "cod"
 
 
-class Payment(db.Model):
-    __tablename__ = "payments"
+class Payment(BaseModel):
+    order_id = ndb.IntegerProperty(required=True)
+    provider = ndb.StringProperty(required=True)
+    provider_order_id = ndb.StringProperty()
+    provider_payment_id = ndb.StringProperty()
+    amount = DecimalProperty(required=True, indexed=False)
+    currency = ndb.TextProperty(default="INR")
+    status = ndb.StringProperty(default="pending")
+    signature_verified = ndb.BooleanProperty(default=False, indexed=False)
+    raw_reference = ndb.TextProperty()
 
-    id = db.Column(db.Integer, primary_key=True)
-    order_id = db.Column(db.Integer, db.ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True)
-    provider = db.Column(db.String(30), nullable=False)
-    provider_order_id = db.Column(db.String(64), nullable=True, index=True)
-    provider_payment_id = db.Column(db.String(64), nullable=True, index=True)
-    amount = db.Column(db.Numeric(10, 2), nullable=False)
-    currency = db.Column(db.String(10), nullable=False, default="INR")
-    status = db.Column(db.String(20), nullable=False, default="pending")
-    signature_verified = db.Column(db.Boolean, nullable=False, default=False)
-    raw_reference = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
-    updated_at = db.Column(
-        db.DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
-        nullable=False,
-    )
+    @classmethod
+    def for_order(cls, order_id, provider):
+        return cls.first(cls.order_id == order_id, cls.provider == provider)
 
-    order = db.relationship("Order", back_populates="payments")
+    @property
+    def order(self):
+        from app.models.order import Order
+
+        return Order.find(self.order_id)
 
     def __repr__(self):
         return f"<Payment {self.id} order={self.order_id} status={self.status}>"
 
 
-class WebhookEvent(db.Model):
-    """Tracks processed Razorpay webhook event ids for idempotency."""
+class WebhookEvent(BaseModel):
+    """Processed Razorpay webhook event ids, for idempotency. The entity id
+    is the provider's event id, so "already processed?" is a key lookup."""
 
-    __tablename__ = "webhook_events"
+    provider = ndb.StringProperty(default="razorpay")
+    event_type = ndb.StringProperty(required=True)
+    payload = ndb.TextProperty()
+    processed_at = UTCDateTimeProperty(auto_now_add=True)
 
-    id = db.Column(db.Integer, primary_key=True)
-    provider = db.Column(db.String(30), nullable=False, default="razorpay")
-    event_id = db.Column(db.String(128), nullable=False, unique=True, index=True)
-    event_type = db.Column(db.String(100), nullable=False)
-    payload = db.Column(db.Text, nullable=True)
-    processed_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    @property
+    def event_id(self):
+        return self.key.id() if self.key else None
 
     def __repr__(self):
         return f"<WebhookEvent {self.event_id}>"

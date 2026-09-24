@@ -1,6 +1,7 @@
 from flask import current_app
 
-from app.extensions import db
+from google.cloud import ndb
+
 from app.models import SiteContent
 
 # (label, default value) — used both to seed the admin "Content" screen and
@@ -59,21 +60,22 @@ DEFAULTS = {
 class SiteContentService:
     @staticmethod
     def get(key):
-        row = SiteContent.query.filter_by(key=key).first()
+        row = SiteContent.get_by_id(key)
         if row is not None:
             return row.value
         return DEFAULTS.get(key, ("", ""))[1]
 
     @staticmethod
     def get_many(keys):
-        return {key: SiteContentService.get(key) for key in keys}
+        rows = SiteContent.get_many(keys)
+        return {key: rows[key].value if key in rows else DEFAULTS.get(key, ("", ""))[1] for key in keys}
 
     @staticmethod
     def list_all():
         """Every editable content row, DB values layered over defaults, for
         the admin listing — so every key always shows up even before it's
         ever been saved."""
-        existing = {row.key: row for row in SiteContent.query.all()}
+        existing = SiteContent.get_many(DEFAULTS.keys())
         items = []
         for key, (label, default_value) in DEFAULTS.items():
             row = existing.get(key)
@@ -92,7 +94,7 @@ class SiteContentService:
     def get_or_404(key):
         if key not in DEFAULTS:
             return None
-        row = SiteContent.query.filter_by(key=key).first()
+        row = SiteContent.get_by_id(key)
         label, default_value = DEFAULTS[key]
         return {
             "key": key,
@@ -104,13 +106,9 @@ class SiteContentService:
     def update(key, value):
         if key not in DEFAULTS:
             raise ValueError(f"Unknown content key '{key}'.")
-        row = SiteContent.query.filter_by(key=key).first()
-        if row is None:
-            row = SiteContent(key=key, label=DEFAULTS[key][0], value=value)
-            db.session.add(row)
-        else:
-            row.value = value
-        db.session.commit()
+        row = SiteContent.get_by_id(key) or SiteContent(id=key, label=DEFAULTS[key][0])
+        row.value = value
+        row.put()
         return row
 
 
@@ -212,9 +210,9 @@ def build_theme_palette(hex_color):
 class BrandingService:
     @staticmethod
     def get():
-        rows = SiteContent.query.filter(SiteContent.key.in_(BRANDING_DEFAULTS.keys())).all()
+        rows = SiteContent.get_many(BRANDING_DEFAULTS.keys())
         values = dict(BRANDING_DEFAULTS)
-        values.update({row.key: row.value for row in rows if row.value})
+        values.update({key: row.value for key, row in rows.items() if row.value})
         return values
 
     @staticmethod
@@ -232,23 +230,24 @@ class BrandingService:
         from app.storage import get_storage
 
         old_path = BrandingService.get()["logo_path"]
+        pending = []
 
         if logo:
             url, path = get_storage().upload(logo, folder="branding")
-            _set_value("logo_url", url, "Logo URL")
-            _set_value("logo_path", path, "Logo path")
+            pending.append(("logo_url", url, "Logo URL"))
+            pending.append(("logo_path", path, "Logo path"))
         elif remove_logo:
-            _set_value("logo_url", "", "Logo URL")
-            _set_value("logo_path", "", "Logo path")
+            pending.append(("logo_url", "", "Logo URL"))
+            pending.append(("logo_path", "", "Logo path"))
 
-        _set_value("site_name", site_name.strip(), "Website name")
-        _set_value("theme_color", theme_color.lower(), "Theme color")
-        _set_value("show_name_with_logo", "1" if show_name_with_logo else "0", "Show name with logo")
+        pending.append(("site_name", site_name.strip(), "Website name"))
+        pending.append(("theme_color", theme_color.lower(), "Theme color"))
+        pending.append(("show_name_with_logo", "1" if show_name_with_logo else "0", "Show name with logo"))
         if heading_font in FONT_CHOICES:
-            _set_value("heading_font", heading_font, "Heading font")
+            pending.append(("heading_font", heading_font, "Heading font"))
         if body_font in FONT_CHOICES:
-            _set_value("body_font", body_font, "Body font")
-        db.session.commit()
+            pending.append(("body_font", body_font, "Body font"))
+        _set_values(pending)
 
         if (logo or remove_logo) and old_path:
             _delete_stored_file(old_path)
@@ -266,12 +265,15 @@ HERO_DEFAULTS = {
 }
 
 
-def _set_value(key, value, label):
-    row = SiteContent.query.filter_by(key=key).first()
-    if row is None:
-        db.session.add(SiteContent(key=key, label=label, value=value))
-    else:
+def _set_values(pending):
+    """Upsert (key, value, label) rows in one batch write."""
+    existing = SiteContent.get_many(key for key, _value, _label in pending)
+    rows = []
+    for key, value, label in pending:
+        row = existing.get(key) or SiteContent(id=key, label=label)
         row.value = value
+        rows.append(row)
+    ndb.put_multi(rows)
 
 
 def _delete_stored_file(path):
@@ -286,9 +288,9 @@ def _delete_stored_file(path):
 class HeroBannerService:
     @staticmethod
     def get():
-        rows = SiteContent.query.filter(SiteContent.key.in_(HERO_DEFAULTS.keys())).all()
+        rows = SiteContent.get_many(HERO_DEFAULTS.keys())
         values = dict(HERO_DEFAULTS)
-        values.update({row.key: row.value for row in rows})
+        values.update({key: row.value for key, row in rows.items()})
         # An admin clearing a text field falls back to the default copy.
         for key in ("hero_eyebrow", "hero_title", "hero_subtitle", "hero_button_text"):
             if not values[key].strip():
@@ -304,20 +306,21 @@ class HeroBannerService:
 
         current = HeroBannerService.get()
         old_path = current["hero_image_path"]
+        pending = []
 
         if image:
             url, path = get_storage().upload(image, folder="banners")
-            _set_value("hero_image_url", url, "Banner image URL")
-            _set_value("hero_image_path", path, "Banner image path")
+            pending.append(("hero_image_url", url, "Banner image URL"))
+            pending.append(("hero_image_path", path, "Banner image path"))
         elif remove_image:
-            _set_value("hero_image_url", "", "Banner image URL")
-            _set_value("hero_image_path", "", "Banner image path")
+            pending.append(("hero_image_url", "", "Banner image URL"))
+            pending.append(("hero_image_path", "", "Banner image path"))
 
-        _set_value("hero_eyebrow", eyebrow.strip(), "Banner eyebrow")
-        _set_value("hero_title", title.strip(), "Banner title")
-        _set_value("hero_subtitle", subtitle.strip(), "Banner subtitle")
-        _set_value("hero_button_text", button_text.strip(), "Banner button text")
-        db.session.commit()
+        pending.append(("hero_eyebrow", eyebrow.strip(), "Banner eyebrow"))
+        pending.append(("hero_title", title.strip(), "Banner title"))
+        pending.append(("hero_subtitle", subtitle.strip(), "Banner subtitle"))
+        pending.append(("hero_button_text", button_text.strip(), "Banner button text"))
+        _set_values(pending)
 
         if (image or remove_image) and old_path:
             _delete_stored_file(old_path)

@@ -2,15 +2,14 @@
 # One-file local runner for the ShopEasy Flask app.
 #
 # Usage:
-#   ./projectrun.sh              start db + web (build if needed)
+#   ./projectrun.sh              start Datastore emulator + web (build if needed)
 #   ./projectrun.sh stop         stop containers
 #   ./projectrun.sh restart      restart the web container
 #   ./projectrun.sh logs         follow web logs
-#   ./projectrun.sh migrate      apply pending migrations
-#   ./projectrun.sh makemigration "message"   autogenerate a new migration
 #   ./projectrun.sh seed-admin   create admin user (prompts for email/password)
 #   ./projectrun.sh seed-data    load sample catalog data
-#   ./projectrun.sh test         run the pytest suite
+#   ./projectrun.sh test         run the pytest suite (against its own emulator)
+#   ./projectrun.sh deploy       deploy to Cloud Run (see scripts/deploy.sh)
 #   ./projectrun.sh shell        shell into the web container
 #   ./projectrun.sh reset        stop and wipe all local data (DESTRUCTIVE)
 
@@ -51,7 +50,7 @@ case "$CMD" in
       docker compose down
     fi
     docker compose build
-    docker compose up -d db
+    docker compose up -d datastore
     docker compose up -d web
     wait_for_health || true
     ;;
@@ -68,15 +67,6 @@ case "$CMD" in
     docker compose logs -f web
     ;;
 
-  migrate)
-    docker compose exec web flask db upgrade
-    ;;
-
-  makemigration)
-    MSG="${2:?Usage: ./projectrun.sh makemigration \"description of change\"}"
-    docker compose exec web flask db migrate -m "$MSG"
-    ;;
-
   seed-admin)
     read -r -p "Admin email: " ADMIN_EMAIL
     docker compose exec web flask seed-admin --email "$ADMIN_EMAIL"
@@ -87,21 +77,25 @@ case "$CMD" in
     ;;
 
   test)
-    docker compose run --rm web pytest -q
+    docker compose --profile test up -d --wait datastore-test
+    docker compose run --rm --no-deps \
+      -e DATASTORE_EMULATOR_HOST=datastore-test:8081 -e DATASTORE_PROJECT_ID=e-com-test \
+      web pytest -q
+    ;;
+
+  deploy)
+    shift
+    ./scripts/deploy.sh "$@"
     ;;
 
   shell)
     docker compose exec web bash
     ;;
 
-  db-shell)
-    docker compose exec db psql -U ecom_user -d ecom_db
-    ;;
-
   reset)
     read -r -p "This deletes the local database and uploaded files. Continue? [y/N] " CONFIRM
     if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
-      docker compose down -v
+      docker compose --profile test down -v
       echo "Local data wiped."
     else
       echo "Aborted."

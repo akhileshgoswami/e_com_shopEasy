@@ -101,7 +101,7 @@
       <div class="col-lg-4 summary-sticky">
         <div class="card card-body mb-3">
           <h2 class="h5 mb-3">Order summary</h2>
-          {% for item in summary.cart.items %}
+          {% for item in summary.items %}
           <div class="d-flex justify-content-between small mb-2">
             <span>{{ item.product.name }} &times; {{ item.quantity }}</span>
             <span>₹{{ '%.2f'|format(item.subtotal) }}</span>

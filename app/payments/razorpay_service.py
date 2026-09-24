@@ -3,8 +3,8 @@ import logging
 
 import razorpay
 from flask import current_app
+from google.cloud import ndb
 
-from app.extensions import db
 from app.models import Payment
 
 logger = logging.getLogger("app.payments.razorpay")
@@ -55,13 +55,15 @@ class RazorpayService:
             raise RazorpayError("Unable to initiate payment with Razorpay right now.") from exc
 
         order.razorpay_order_id = razorpay_order["id"]
+        to_put = [order]
 
-        payment = Payment.query.filter_by(order_id=order.id, provider="razorpay").first()
+        payment = Payment.for_order(order.id, "razorpay")
         if payment:
             payment.provider_order_id = razorpay_order["id"]
             payment.raw_reference = json.dumps(razorpay_order)
+            to_put.append(payment)
 
-        db.session.commit()
+        ndb.put_multi(to_put)
         logger.info("Razorpay order created: order_number=%s razorpay_order_id=%s", order.order_number, razorpay_order["id"])
 
         return {

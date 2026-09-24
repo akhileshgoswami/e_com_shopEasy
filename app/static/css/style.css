@@ -741,3 +741,33 @@ section h2.h4 { font-weight: 700; }
   .hs-card > .card-header { flex-wrap: wrap; }
   .hs-card > .card-header input[type="text"] { flex: 1 1 140px; min-width: 0; }
 }
+
+/* Google sign-in (follows Google's light button style) */
+.btn-google {
+  background: #fff;
+  color: #1f1f1f;
+  border: 1px solid #dadce0;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.92rem;
+  font-weight: 500;
+  padding: 0.6rem 1rem;
+}
+.btn-google:hover, .btn-google:focus {
+  background: #f8f9fa;
+  color: #1f1f1f;
+  border-color: #c6c9cc;
+  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.2);
+}
+.btn-google .google-icon { flex-shrink: 0; }
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1rem 0;
+  color: var(--muted-ink);
+  font-size: 0.78rem;
+}
+.auth-divider::before, .auth-divider::after { content: ""; flex: 1; border-top: 1px solid var(--border-soft); }
+.login-menu { width: 280px; }
+.nav-drawer-links a.btn-google { color: #1f1f1f; padding: 0.6rem 1rem; justify-content: center; }

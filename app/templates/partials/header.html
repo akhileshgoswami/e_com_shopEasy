@@ -1,4 +1,5 @@
 {% import "partials/brand.html" as b with context %}
+{% import "partials/google_button.html" as g %}
 <div class="trust-strip d-none d-md-block">
   <div class="container">
     <span><i class="bi bi-truck"></i> Free delivery over ₹999</span>
@@ -46,9 +47,21 @@
           </ul>
         </div>
         {% else %}
-        <a href="{{ url_for('auth.login') }}" class="header-icon-btn text-dark text-decoration-none d-flex align-items-center gap-1" aria-label="Login">
-          <i class="bi bi-person-circle"></i> <span class="d-none d-md-inline fs-6">Login</span>
-        </a>
+        <div class="dropdown">
+          <a class="header-icon-btn text-dark text-decoration-none dropdown-toggle d-flex align-items-center gap-1" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Login">
+            <i class="bi bi-person-circle"></i> <span class="d-none d-md-inline fs-6">Login</span>
+          </a>
+          <div class="dropdown-menu dropdown-menu-end login-menu p-3">
+            <p class="fw-semibold mb-1">Welcome</p>
+            <p class="small text-muted mb-3">Log in to track orders and check out faster.</p>
+            {% if google_oauth_enabled %}
+            {{ g.google_button() }}
+            <div class="auth-divider"><span>or</span></div>
+            {% endif %}
+            <a href="{{ url_for('auth.login') }}" class="btn btn-primary w-100 mb-2">Log in with email</a>
+            <a href="{{ url_for('auth.register') }}" class="btn btn-outline-secondary w-100">Create account</a>
+          </div>
+        </div>
         {% endif %}
 
         <a href="{{ url_for('cart.view_cart') }}" class="header-icon-btn text-dark text-decoration-none position-relative d-none d-md-inline-flex" aria-label="Cart">
@@ -106,7 +119,10 @@
               {% endif %}
               <li><a href="{{ url_for('auth.logout') }}"><i class="bi bi-box-arrow-right"></i> Logout</a></li>
               {% else %}
-              <li><a href="{{ url_for('auth.login') }}"><i class="bi bi-box-arrow-in-right"></i> Login</a></li>
+              {% if google_oauth_enabled %}
+              <li class="mb-2">{{ g.google_button() }}</li>
+              {% endif %}
+              <li><a href="{{ url_for('auth.login') }}"><i class="bi bi-box-arrow-in-right"></i> Login with email</a></li>
               <li><a href="{{ url_for('auth.register') }}"><i class="bi bi-person-plus"></i> Create account</a></li>
               <li><a href="{{ url_for('cart.view_cart') }}"><i class="bi bi-cart3"></i> Cart</a></li>
               {% endif %}

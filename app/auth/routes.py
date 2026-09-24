@@ -1,6 +1,6 @@
 from urllib.parse import urlparse
 
-from flask import current_app, flash, redirect, render_template, request, session, url_for
+from flask import abort, current_app, flash, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 
 from app.auth import auth_bp
@@ -16,9 +16,10 @@ from app.auth.forms import (
     ResetPasswordForm,
 )
 from app.auth.services import AuthError, AuthenticationService
-from app.extensions import db, limiter, oauth
+from app.extensions import limiter, oauth
 from app.models import Address, Order
 from app.services.email_service import EmailService
+from app.utils import newest_first
 
 GOOGLE_OAUTH_NEXT_SESSION_KEY = "google_oauth_next"
 
@@ -166,7 +167,7 @@ def forgot_password():
     if form.validate_on_submit():
         from app.models import User
 
-        user = User.query.filter_by(email=form.email.data.strip().lower()).first()
+        user = User.by_email(form.email.data)
         if user:
             token = AuthenticationService.generate_reset_token(user)
             reset_url = url_for("auth.reset_password", token=token, _external=True)
@@ -202,14 +203,12 @@ def profile():
     if form.validate_on_submit():
         current_user.name = form.name.data
         current_user.phone = form.phone.data
-        db.session.commit()
+        current_user.put()
         flash("Profile updated.", "success")
         return redirect(url_for("auth.profile"))
 
     password_form = ChangePasswordForm()
-    recent_orders = (
-        Order.query.filter_by(user_id=current_user.id).order_by(Order.created_at.desc()).limit(5).all()
-    )
+    recent_orders = newest_first(Order.all(Order.user_id == current_user.id))[:5]
     return render_template("auth/profile.html", form=form, password_form=password_form, recent_orders=recent_orders)
 
 
@@ -231,10 +230,17 @@ def change_password():
     return redirect(url_for("auth.profile"))
 
 
+def _owned_address_or_404(address_id):
+    address = Address.owned_by(address_id, current_user.id)
+    if address is None:
+        abort(404)
+    return address
+
+
 @auth_bp.route("/addresses")
 @login_required
 def addresses():
-    user_addresses = Address.query.filter_by(user_id=current_user.id).order_by(Address.is_default.desc(), Address.id.desc()).all()
+    user_addresses = Address.for_user(current_user.id)
     return render_template("auth/addresses.html", addresses=user_addresses)
 
 
@@ -244,11 +250,10 @@ def address_new():
     form = AddressForm()
     if form.validate_on_submit():
         if form.is_default.data:
-            Address.query.filter_by(user_id=current_user.id, is_default=True).update({"is_default": False})
+            Address.clear_default(current_user.id)
         address = Address(user_id=current_user.id)
         form.populate_obj(address)
-        db.session.add(address)
-        db.session.commit()
+        address.put()
         flash("Address added.", "success")
         return redirect(url_for("auth.addresses"))
     return render_template("auth/address_form.html", form=form, is_new=True)
@@ -257,15 +262,13 @@ def address_new():
 @auth_bp.route("/addresses/<int:address_id>/edit", methods=["GET", "POST"])
 @login_required
 def address_edit(address_id):
-    address = Address.query.filter_by(id=address_id, user_id=current_user.id).first_or_404()
+    address = _owned_address_or_404(address_id)
     form = AddressForm(obj=address)
     if form.validate_on_submit():
         if form.is_default.data:
-            Address.query.filter(
-                Address.user_id == current_user.id, Address.id != address.id
-            ).update({"is_default": False})
+            Address.clear_default(current_user.id, except_id=address.id)
         form.populate_obj(address)
-        db.session.commit()
+        address.put()
         flash("Address updated.", "success")
         return redirect(url_for("auth.addresses"))
     return render_template("auth/address_form.html", form=form, is_new=False, address=address)
@@ -274,9 +277,8 @@ def address_edit(address_id):
 @auth_bp.route("/addresses/<int:address_id>/delete", methods=["POST"])
 @login_required
 def address_delete(address_id):
-    address = Address.query.filter_by(id=address_id, user_id=current_user.id).first_or_404()
-    db.session.delete(address)
-    db.session.commit()
+    address = _owned_address_or_404(address_id)
+    address.key.delete()
     flash("Address removed.", "info")
     return redirect(url_for("auth.addresses"))
 
@@ -284,9 +286,9 @@ def address_delete(address_id):
 @auth_bp.route("/addresses/<int:address_id>/set-default", methods=["POST"])
 @login_required
 def address_set_default(address_id):
-    address = Address.query.filter_by(id=address_id, user_id=current_user.id).first_or_404()
-    Address.query.filter_by(user_id=current_user.id).update({"is_default": False})
+    address = _owned_address_or_404(address_id)
+    Address.clear_default(current_user.id, except_id=address.id)
     address.is_default = True
-    db.session.commit()
+    address.put()
     flash("Default address updated.", "success")
     return redirect(url_for("auth.addresses"))

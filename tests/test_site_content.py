@@ -20,7 +20,7 @@ def test_customer_cannot_edit_site_content(client, customer):
     assert resp.status_code == 403
 
 
-def test_admin_can_update_about_page(client, admin_user, db):
+def test_admin_can_update_about_page(client, admin_user):
     admin_login(client, admin_user.email)
 
     resp = client.get("/admin/content")
@@ -34,7 +34,7 @@ def test_admin_can_update_about_page(client, admin_user, db):
     )
     assert resp.status_code == 200
 
-    row = SiteContent.query.filter_by(key="about_body").first()
+    row = SiteContent.get_by_id("about_body")
     assert row is not None
     assert "luxury story" in row.value
 
@@ -43,7 +43,7 @@ def test_admin_can_update_about_page(client, admin_user, db):
     assert b"Second paragraph here" in public_resp.data
 
 
-def test_admin_can_update_contact_info(client, admin_user, db):
+def test_admin_can_update_contact_info(client, admin_user):
     admin_login(client, admin_user.email)
     resp = client.post(
         "/admin/content/contact_email/edit",
@@ -62,7 +62,7 @@ def test_unknown_content_key_404s(client, admin_user):
     assert resp.status_code == 404
 
 
-def test_nl2p_escapes_html_input(client, admin_user, db):
+def test_nl2p_escapes_html_input(client, admin_user):
     admin_login(client, admin_user.email)
     client.post(
         "/admin/content/about_body/edit",
@@ -73,12 +73,12 @@ def test_nl2p_escapes_html_input(client, admin_user, db):
     assert b"&lt;script&gt;" in resp.data
 
 
-def test_site_content_service_falls_back_to_default_without_db_row(app, db):
+def test_site_content_service_falls_back_to_default_without_db_row(app):
     with app.app_context():
         assert SiteContentService.get("contact_phone") == "+91 98765 43210"
 
 
-def test_admin_can_update_branding(client, admin_user, db):
+def test_admin_can_update_branding(client, admin_user):
     admin_login(client, admin_user.email)
 
     resp = client.get("/admin/settings")
@@ -98,11 +98,11 @@ def test_admin_can_update_branding(client, admin_user, db):
     assert b"--gold-rgb: 31, 111, 178;" in resp.data
 
 
-def test_branding_rejects_invalid_color(client, admin_user, db):
+def test_branding_rejects_invalid_color(client, admin_user):
     admin_login(client, admin_user.email)
     resp = client.post("/admin/settings", data={"site_name": "Luxe Mart", "theme_color": "red; }"})
     assert b"Use a hex color" in resp.data
-    assert SiteContent.query.filter_by(key="theme_color").first() is None
+    assert SiteContent.get_by_id("theme_color") is None
 
 
 def test_customer_cannot_update_branding(client, customer):
@@ -117,7 +117,7 @@ def test_home_banner_shows_default_copy(client):
     assert b"has-image" not in resp.data
 
 
-def test_admin_can_upload_and_remove_banner_image(client, admin_user, db):
+def test_admin_can_upload_and_remove_banner_image(client, admin_user):
     admin_login(client, admin_user.email)
 
     resp = client.post(
@@ -134,7 +134,7 @@ def test_admin_can_upload_and_remove_banner_image(client, admin_user, db):
     )
     assert b"Homepage banner updated." in resp.data
 
-    image_url = SiteContent.query.filter_by(key="hero_image_url").first().value
+    image_url = SiteContent.get_by_id("hero_image_url").value
     assert "banners" in image_url
 
     resp = client.get("/")
@@ -165,7 +165,7 @@ def test_customer_cannot_update_banner(client, customer):
     assert resp.status_code == 403
 
 
-def test_admin_can_upload_and_remove_logo(client, admin_user, db):
+def test_admin_can_upload_and_remove_logo(client, admin_user):
     admin_login(client, admin_user.email)
 
     resp = client.post(
@@ -180,7 +180,7 @@ def test_admin_can_upload_and_remove_logo(client, admin_user, db):
     )
     assert b"Branding updated." in resp.data
 
-    logo_url = SiteContent.query.filter_by(key="logo_url").first().value
+    logo_url = SiteContent.get_by_id("logo_url").value
     assert "branding" in logo_url
 
     resp = client.get("/")
@@ -198,7 +198,7 @@ def test_admin_can_upload_and_remove_logo(client, admin_user, db):
     assert b'<span class="brand-name">Luxe Mart</span>' in resp.data
 
 
-def test_admin_can_change_fonts(client, admin_user, db):
+def test_admin_can_change_fonts(client, admin_user):
     admin_login(client, admin_user.email)
 
     resp = client.get("/")
@@ -221,11 +221,11 @@ def test_admin_can_change_fonts(client, admin_user, db):
     assert b'--font-body: "Lato"' in resp.data
 
 
-def test_branding_rejects_unknown_font(client, admin_user, db):
+def test_branding_rejects_unknown_font(client, admin_user):
     admin_login(client, admin_user.email)
     client.post(
         "/admin/settings",
         data={"site_name": "ShopEasy", "theme_color": "#b8873f", "heading_font": "evil;}", "body_font": "inter"},
         content_type="multipart/form-data",
     )
-    assert SiteContent.query.filter_by(key="heading_font").first() is None
+    assert SiteContent.get_by_id("heading_font") is None

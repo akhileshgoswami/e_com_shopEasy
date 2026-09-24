@@ -1,8 +1,8 @@
 from app.models import Category, Product, Subcategory
-from tests.conftest import admin_login
+from tests.conftest import admin_login, reload
 
 
-def test_category_crud(client, admin_user, db):
+def test_category_crud(client, admin_user):
     admin_login(client, admin_user.email)
 
     resp = client.post(
@@ -11,7 +11,7 @@ def test_category_crud(client, admin_user, db):
         follow_redirects=True,
     )
     assert resp.status_code == 200
-    category = Category.query.filter_by(name="Fashion").first()
+    category = Category.first(Category.name == "Fashion")
     assert category is not None
     assert category.slug == "fashion"
 
@@ -21,16 +21,16 @@ def test_category_crud(client, admin_user, db):
         follow_redirects=True,
     )
     assert resp.status_code == 200
-    db.session.refresh(category)
+    category = reload(category)
     assert category.name == "Fashion & Style"
 
     resp = client.post(f"/admin/categories/{category.id}/delete", follow_redirects=True)
     assert resp.status_code == 200
-    db.session.refresh(category)
+    category = reload(category)
     assert category.is_active is False
 
 
-def test_subcategory_crud(client, admin_user, category, db):
+def test_subcategory_crud(client, admin_user, category):
     admin_login(client, admin_user.email)
 
     resp = client.post(
@@ -39,17 +39,17 @@ def test_subcategory_crud(client, admin_user, category, db):
         follow_redirects=True,
     )
     assert resp.status_code == 200
-    sub = Subcategory.query.filter_by(name="Laptops").first()
+    sub = Subcategory.first(Subcategory.name == "Laptops")
     assert sub is not None
     assert sub.category_id == category.id
 
     resp = client.post(f"/admin/subcategories/{sub.id}/delete", follow_redirects=True)
     assert resp.status_code == 200
-    db.session.refresh(sub)
+    sub = reload(sub)
     assert sub.is_active is False
 
 
-def test_product_crud(client, admin_user, category, subcategory, db):
+def test_product_crud(client, admin_user, category, subcategory):
     admin_login(client, admin_user.email)
 
     resp = client.post(
@@ -70,7 +70,7 @@ def test_product_crud(client, admin_user, category, subcategory, db):
         follow_redirects=True,
     )
     assert resp.status_code == 200
-    product = Product.query.filter_by(sku="SKU-NEW-001").first()
+    product = Product.first(Product.sku == "SKU-NEW-001")
     assert product is not None
     assert product.slug == "new-gadget"
 
@@ -92,17 +92,17 @@ def test_product_crud(client, admin_user, category, subcategory, db):
         follow_redirects=True,
     )
     assert resp.status_code == 200
-    db.session.refresh(product)
+    product = reload(product)
     assert float(product.price) == 599.00
     assert float(product.sale_price) == 499.00
 
     resp = client.post(f"/admin/products/{product.id}/toggle-active", follow_redirects=True)
     assert resp.status_code == 200
-    db.session.refresh(product)
+    product = reload(product)
     assert product.is_active is False
 
 
-def test_duplicate_sku_rejected(client, admin_user, category, product, db):
+def test_duplicate_sku_rejected(client, admin_user, category, product):
     admin_login(client, admin_user.email)
     resp = client.post(
         "/admin/products/new",

@@ -12,7 +12,7 @@ class CouponService:
     def get_valid_coupon(code):
         if not code:
             return None
-        coupon = Coupon.query.filter(Coupon.code == code.strip().upper()).first()
+        coupon = Coupon.by_code(code)
         if coupon is None:
             raise CouponError("Invalid coupon code.")
         if not coupon.is_valid_now():
@@ -40,4 +40,9 @@ class CouponService:
 
     @staticmethod
     def redeem(coupon):
+        """Increment in memory; call inside a transaction on a coupon read
+        in that transaction, then put it. Re-checks validity there so two
+        concurrent checkouts can't both take the last use."""
+        if not coupon.is_valid_now():
+            raise CouponError("This coupon is no longer valid.")
         coupon.used_count += 1

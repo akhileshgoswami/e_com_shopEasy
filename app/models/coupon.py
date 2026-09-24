@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
 
-from app.extensions import db
+from google.cloud import ndb
+
+from app.models.base import ZERO, BaseModel, DecimalProperty, UTCDateTimeProperty
 
 
 class DiscountType:
@@ -9,21 +11,21 @@ class DiscountType:
     CHOICES = (PERCENT, FLAT)
 
 
-class Coupon(db.Model):
-    __tablename__ = "coupons"
+class Coupon(BaseModel):
+    code = ndb.StringProperty(required=True)
+    discount_type = ndb.TextProperty(default=DiscountType.PERCENT)
+    discount_value = DecimalProperty(required=True, indexed=False)
+    minimum_order_value = DecimalProperty(default=ZERO, indexed=False)
+    maximum_discount = DecimalProperty(indexed=False)
+    start_at = UTCDateTimeProperty(indexed=False)
+    expires_at = UTCDateTimeProperty(indexed=False)
+    usage_limit = ndb.IntegerProperty(indexed=False)
+    used_count = ndb.IntegerProperty(default=0, indexed=False)
+    is_active = ndb.BooleanProperty(default=True)
 
-    id = db.Column(db.Integer, primary_key=True)
-    code = db.Column(db.String(50), nullable=False, unique=True, index=True)
-    discount_type = db.Column(db.String(10), nullable=False, default=DiscountType.PERCENT)
-    discount_value = db.Column(db.Numeric(10, 2), nullable=False)
-    minimum_order_value = db.Column(db.Numeric(10, 2), nullable=False, default=0)
-    maximum_discount = db.Column(db.Numeric(10, 2), nullable=True)
-    start_at = db.Column(db.DateTime(timezone=True), nullable=True)
-    expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
-    usage_limit = db.Column(db.Integer, nullable=True)
-    used_count = db.Column(db.Integer, nullable=False, default=0)
-    is_active = db.Column(db.Boolean, nullable=False, default=True)
-    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    @classmethod
+    def by_code(cls, code):
+        return cls.first(cls.code == (code or "").strip().upper())
 
     def is_valid_now(self):
         from app.utils import as_aware_utc

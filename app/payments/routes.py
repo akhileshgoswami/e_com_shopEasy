@@ -2,8 +2,9 @@ import logging
 
 from flask import current_app, jsonify, render_template, request, url_for
 from flask_login import current_user, login_required
+from google.cloud import ndb
 
-from app.extensions import db, limiter
+from app.extensions import limiter
 from app.models import Order, OrderStatus, Payment, PaymentMethod, PaymentStatus
 from app.payments import payments_bp
 from app.payments.razorpay_service import RazorpayError, RazorpayService
@@ -13,8 +14,8 @@ logger = logging.getLogger("app.payments")
 
 
 def _get_owned_pending_order(order_id):
-    order = Order.query.filter_by(id=order_id, user_id=current_user.id).first()
-    if order is None:
+    order = Order.find(order_id)
+    if order is None or order.user_id != current_user.id:
         return None
     if order.payment_method != PaymentMethod.RAZORPAY:
         return None
@@ -98,22 +99,25 @@ def verify_razorpay_payment():
     try:
         RazorpayService.verify_payment_signature(razorpay_order_id, razorpay_payment_id, razorpay_signature)
     except RazorpayError as exc:
-        payment = Payment.query.filter_by(order_id=order.id, provider="razorpay").first()
+        payment = Payment.for_order(order.id, "razorpay")
         if payment:
             payment.status = "failed"
             payment.signature_verified = False
-            db.session.commit()
+            payment.put()
         return jsonify({"success": False, "message": str(exc)}), 400
 
-    payment = Payment.query.filter_by(order_id=order.id, provider="razorpay").first()
+    order.razorpay_payment_id = razorpay_payment_id
+    order.razorpay_signature = razorpay_signature
+    to_put = [order]
+
+    payment = Payment.for_order(order.id, "razorpay")
     if payment:
         payment.provider_payment_id = razorpay_payment_id
         payment.status = "paid"
         payment.signature_verified = True
+        to_put.append(payment)
 
-    order.razorpay_payment_id = razorpay_payment_id
-    order.razorpay_signature = razorpay_signature
-    db.session.commit()
+    ndb.put_multi(to_put)
 
     OrderService.mark_paid(order)
 
@@ -132,11 +136,11 @@ def razorpay_payment_failed():
     reason = (data.get("reason") or "Payment failed or cancelled by customer.").strip()[:500]
 
     if order.order_status == OrderStatus.PENDING_PAYMENT:
-        payment = Payment.query.filter_by(order_id=order.id, provider="razorpay").first()
+        payment = Payment.for_order(order.id, "razorpay")
         if payment:
             payment.status = "failed"
             payment.raw_reference = reason
-            db.session.commit()
+            payment.put()
         OrderService.mark_payment_failed(order, note=reason)
 
     return jsonify({"success": True})

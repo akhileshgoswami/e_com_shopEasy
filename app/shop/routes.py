@@ -1,7 +1,7 @@
 from flask import render_template, request
 from flask_login import current_user
 
-from app.models import Cart
+from app.models import CartItem
 from app.services.home_sections_service import HomeSectionsService
 from app.services.site_content_service import HeroBannerService, SiteContentService
 from app.shop import shop_bp
@@ -123,10 +123,9 @@ def product_detail(slug):
 
     in_cart_quantity = 0
     if current_user.is_authenticated:
-        cart = Cart.query.filter_by(user_id=current_user.id).first()
-        if cart:
-            item = next((i for i in cart.items if i.product_id == product.id), None)
-            in_cart_quantity = item.quantity if item else 0
+        # The cart id is the user id.
+        item = CartItem.first(CartItem.cart_id == current_user.id, CartItem.product_id == product.id)
+        in_cart_quantity = item.quantity if item else 0
 
     return render_template("product_detail.html", product=product, related=related, in_cart_quantity=in_cart_quantity)
 

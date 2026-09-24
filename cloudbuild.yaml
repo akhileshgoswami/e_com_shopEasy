@@ -1,17 +1,48 @@
 # Alternative to .github/workflows/deploy.yml for teams using Cloud Build
-# instead of GitHub Actions. Trigger this from a Cloud Build GitHub trigger
-# on pushes to main, or run manually:
+# instead of GitHub Actions. Provision once with ./scripts/deploy.sh (it
+# creates the service, database, bucket and secrets); this file then only
+# tests, builds and rolls out new images. Trigger it from a Cloud Build
+# GitHub trigger on pushes to main, or run manually:
 #   gcloud builds submit --config=cloudbuild.yaml \
-#     --substitutions=_REGION=asia-south1,_REPO_NAME=ecom-repo,_SERVICE_NAME=ecom-web,_CLOUDSQL_CONNECTION_NAME=PROJECT:REGION:INSTANCE
+#     --substitutions=_REGION=us-central1,_REPO_NAME=ecom-repo,_SERVICE_NAME=ecom-web,SHORT_SHA=$(git rev-parse --short HEAD)
 
 steps:
+  # Steps share the "cloudbuild" Docker network, so the emulator started
+  # here is reachable as datastore:8081 from the test step.
+  - id: start-datastore-emulator
+    name: gcr.io/cloud-builders/docker
+    args:
+      - run
+      - -d
+      - --name=datastore
+      - --network=cloudbuild
+      - gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
+      - gcloud
+      - beta
+      - emulators
+      - datastore
+      - start
+      - --host-port=0.0.0.0:8081
+      - --project=e-com-test
+      - --consistency=1.0
+      - --no-store-on-disk
+
   - id: install-and-test
     name: python:3.12-slim
     entrypoint: bash
+    env:
+      - DATASTORE_EMULATOR_HOST=datastore:8081
+      - DATASTORE_PROJECT_ID=e-com-test
     args:
       - -c
       - |
         pip install -r requirements.txt --quiet
+        python -c "import time, urllib.request
+        for _ in range(60):
+            try:
+                urllib.request.urlopen('http://datastore:8081/'); break
+            except OSError:
+                time.sleep(2)"
         pytest -q
 
   - id: build
@@ -27,24 +58,6 @@ steps:
     args:
       - push
       - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/ecom-web:${SHORT_SHA}"
-
-  - id: migrate
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: bash
-    args:
-      - -c
-      - |
-        gcloud run jobs deploy ecom-migrate \
-          --image="${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/ecom-web:${SHORT_SHA}" \
-          --region="${_REGION}" \
-          --project="${PROJECT_ID}" \
-          --set-cloudsql-instances="${_CLOUDSQL_CONNECTION_NAME}" \
-          --set-env-vars="FLASK_APP=wsgi.py,FLASK_ENV=production,INSTANCE_CONNECTION_NAME=${_CLOUDSQL_CONNECTION_NAME},DB_NAME=ecom_db,DB_USER=ecom_user,GOOGLE_CLOUD_PROJECT=${PROJECT_ID}" \
-          --set-secrets="SECRET_KEY=ecom-flask-secret-key:latest,DB_PASSWORD=ecom-db-password:latest,RAZORPAY_KEY_ID=ecom-razorpay-key-id:latest,RAZORPAY_KEY_SECRET=ecom-razorpay-key-secret:latest,RAZORPAY_WEBHOOK_SECRET=ecom-razorpay-webhook-secret:latest" \
-          --command="flask" \
-          --args="db,upgrade" \
-          --max-retries=0
-        gcloud run jobs execute ecom-migrate --region="${_REGION}" --project="${PROJECT_ID}" --wait
 
   - id: deploy
     name: gcr.io/google.com/cloudsdktool/cloud-sdk

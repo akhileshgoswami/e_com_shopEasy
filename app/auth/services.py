@@ -4,8 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
-from app.extensions import db
-from app.models import Role, User
+from app.models import Cart, Role, User
 from app.utils import as_aware_utc
 
 logger = logging.getLogger("app.auth")
@@ -20,22 +19,23 @@ class AuthError(Exception):
     pass
 
 
+def _create_with_cart(user):
+    """The cart's id is the user's id, so it can only be created once the
+    user has one."""
+    user.put()
+    Cart(id=user.id, user_id=user.id).put()
+
+
 class AuthenticationService:
     @staticmethod
     def register_customer(name, email, password, phone=None):
         email = email.strip().lower()
-        if User.query.filter_by(email=email).first():
+        if User.by_email(email):
             raise AuthError("An account with this email already exists.")
 
         user = User(name=name.strip(), email=email, phone=phone, role=Role.CUSTOMER, is_active=True)
         user.set_password(password)
-        db.session.add(user)
-        db.session.flush()
-
-        from app.models import Cart
-
-        db.session.add(Cart(user_id=user.id))
-        db.session.commit()
+        _create_with_cart(user)
         logger.info("New customer registered: user_id=%s", user.id)
         return user
 
@@ -53,7 +53,7 @@ class AuthenticationService:
         if not email_verified:
             raise AuthError("Your Google email address is not verified.")
 
-        user = User.query.filter_by(email=email).first()
+        user = User.by_email(email)
         if user is not None:
             if not user.is_active:
                 raise AuthError("This account has been deactivated.")
@@ -61,20 +61,13 @@ class AuthenticationService:
 
         user = User(name=name or email.split("@")[0], email=email, role=Role.CUSTOMER, is_active=True)
         user.set_password(secrets.token_urlsafe(32))
-        db.session.add(user)
-        db.session.flush()
-
-        from app.models import Cart
-
-        db.session.add(Cart(user_id=user.id))
-        db.session.commit()
+        _create_with_cart(user)
         logger.info("New customer registered via Google: user_id=%s", user.id)
         return user
 
     @staticmethod
     def authenticate(email, password):
-        email = (email or "").strip().lower()
-        user = User.query.filter_by(email=email).first()
+        user = User.by_email(email)
 
         if user is None:
             logger.info("Login failed: unknown email")
@@ -96,17 +89,17 @@ class AuthenticationService:
             if user.failed_login_attempts >= MAX_FAILED_ATTEMPTS:
                 user.locked_until = now + timedelta(minutes=LOCKOUT_MINUTES)
                 user.failed_login_attempts = 0
-                db.session.commit()
+                user.put()
                 logger.warning("Account locked after repeated failures: user_id=%s", user.id)
                 raise AuthError(f"Too many failed attempts. Account locked for {LOCKOUT_MINUTES} minutes.")
-            db.session.commit()
+            user.put()
             logger.info("Login failed: bad password user_id=%s attempts=%s", user.id, user.failed_login_attempts)
             raise AuthError("Invalid email or password.")
 
         user.failed_login_attempts = 0
         user.locked_until = None
         user.last_login_at = now
-        db.session.commit()
+        user.put()
         logger.info("Login success: user_id=%s", user.id)
         return user
 
@@ -129,7 +122,7 @@ class AuthenticationService:
         except BadSignature:
             raise AuthError("This password reset link is invalid.")
 
-        user = User.query.get(data.get("user_id"))
+        user = User.find(data.get("user_id"))
         if user is None:
             raise AuthError("This password reset link is invalid.")
         return user
@@ -139,7 +132,7 @@ class AuthenticationService:
         user.set_password(new_password)
         user.failed_login_attempts = 0
         user.locked_until = None
-        db.session.commit()
+        user.put()
         logger.info("Password reset completed: user_id=%s", user.id)
 
     @staticmethod
@@ -147,5 +140,5 @@ class AuthenticationService:
         if not user.check_password(current_password):
             raise AuthError("Current password is incorrect.")
         user.set_password(new_password)
-        db.session.commit()
+        user.put()
         logger.info("Password changed: user_id=%s", user.id)

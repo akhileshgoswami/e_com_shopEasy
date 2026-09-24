@@ -1,4 +1,5 @@
-from app.extensions import db
+from google.cloud import ndb
+
 from app.models import (
     Category,
     Coupon,
@@ -11,8 +12,10 @@ from app.models import (
     Subcategory,
     User,
 )
+from app.models.base import ZERO
 from app.shop.services import CategoryService, ProductService
 from app.storage import get_storage
+from app.utils import newest_first
 
 
 class AdminError(Exception):
@@ -33,8 +36,7 @@ class AdminCategoryService:
         if form.image.data:
             url, _path = get_storage().upload(form.image.data, folder="categories")
             category.image_url = url
-        db.session.add(category)
-        db.session.commit()
+        category.put()
         return category
 
     @staticmethod
@@ -48,15 +50,16 @@ class AdminCategoryService:
         if form.image.data:
             url, _path = get_storage().upload(form.image.data, folder="categories")
             category.image_url = url
-        db.session.commit()
+        category.put()
         return category
 
     @staticmethod
     def delete_category(category):
         category.is_active = False
-        for sub in category.subcategories:
+        subcategories = category.subcategories
+        for sub in subcategories:
             sub.is_active = False
-        db.session.commit()
+        ndb.put_multi([category, *subcategories])
 
     @staticmethod
     def create_subcategory(form):
@@ -72,8 +75,7 @@ class AdminCategoryService:
         if form.image.data:
             url, _path = get_storage().upload(form.image.data, folder="subcategories")
             subcategory.image_url = url
-        db.session.add(subcategory)
-        db.session.commit()
+        subcategory.put()
         return subcategory
 
     @staticmethod
@@ -90,13 +92,13 @@ class AdminCategoryService:
         if form.image.data:
             url, _path = get_storage().upload(form.image.data, folder="subcategories")
             subcategory.image_url = url
-        db.session.commit()
+        subcategory.put()
         return subcategory
 
     @staticmethod
     def delete_subcategory(subcategory):
         subcategory.is_active = False
-        db.session.commit()
+        subcategory.put()
 
 
 class AdminProductService:
@@ -116,39 +118,38 @@ class AdminProductService:
 
     @classmethod
     def create_product(cls, form):
-        existing_sku = Product.query.filter_by(sku=form.sku.data.strip().upper()).first()
+        existing_sku = Product.first(Product.sku == form.sku.data.strip().upper())
         if existing_sku:
             raise AdminError(f"SKU '{form.sku.data}' is already in use.")
 
         product = Product(slug=ProductService.unique_slug(form.name.data))
         cls._apply_common_fields(product, form)
-        db.session.add(product)
-        db.session.commit()
+        product.put()
         return product
 
     @classmethod
     def update_product(cls, product, form):
-        existing_sku = Product.query.filter(Product.sku == form.sku.data.strip().upper(), Product.id != product.id).first()
-        if existing_sku:
+        existing_sku = Product.first(Product.sku == form.sku.data.strip().upper())
+        if existing_sku and existing_sku.id != product.id:
             raise AdminError(f"SKU '{form.sku.data}' is already in use.")
 
         if form.name.data != product.name:
             product.slug = ProductService.unique_slug(form.name.data, exclude_id=product.id)
         cls._apply_common_fields(product, form)
-        db.session.commit()
+        product.put()
         return product
 
     @staticmethod
     def toggle_active(product):
         product.is_active = not product.is_active
-        db.session.commit()
+        product.put()
         return product
 
     @staticmethod
     def update_stock(product, stock_quantity, low_stock_threshold):
         product.stock_quantity = stock_quantity
         product.low_stock_threshold = low_stock_threshold
-        db.session.commit()
+        product.put()
         return product
 
     @staticmethod
@@ -156,61 +157,58 @@ class AdminProductService:
         url, storage_path = get_storage().upload(file_storage, folder="products")
         max_sort = max([img.sort_order for img in product.images], default=-1)
         image = ProductImage(product_id=product.id, image_url=url, storage_path=storage_path, sort_order=max_sort + 1)
-        db.session.add(image)
+        to_put = [image]
         if set_as_main or not product.image_url:
             product.image_url = url
-        db.session.commit()
+            to_put.append(product)
+        ndb.put_multi(to_put)
         return image
 
     @staticmethod
     def set_main_image(product, image):
         product.image_url = image.image_url
-        db.session.commit()
+        product.put()
 
     @staticmethod
     def delete_image(product, image):
         get_storage().delete(image.storage_path)
         was_main = product.image_url == image.image_url
-        db.session.delete(image)
-        db.session.flush()
+        image.key.delete()
         if was_main:
-            remaining = ProductImage.query.filter_by(product_id=product.id).order_by(ProductImage.sort_order).first()
-            product.image_url = remaining.image_url if remaining else None
-        db.session.commit()
+            remaining = product.images
+            product.image_url = remaining[0].image_url if remaining else None
+            product.put()
 
 
 class DashboardService:
     @staticmethod
     def get_stats():
-        total_users = User.query.count()
-        total_products = Product.query.count()
-        total_categories = Category.query.count()
-        total_orders = Order.query.count()
-        pending_orders = Order.query.filter(
-            Order.order_status.in_([OrderStatus.PLACED, OrderStatus.CONFIRMED, OrderStatus.PROCESSING])
-        ).count()
-        completed_orders = Order.query.filter(Order.order_status == OrderStatus.DELIVERED).count()
-        online_payments = Order.query.filter(
-            Order.payment_method == PaymentMethod.RAZORPAY, Order.payment_status == PaymentStatus.PAID
-        ).count()
-        cod_orders = Order.query.filter(Order.payment_method == PaymentMethod.COD).count()
-        out_of_stock = Product.query.filter(Product.stock_quantity == 0).count()
-        low_stock = Product.query.filter(Product.stock_quantity > 0, Product.stock_quantity <= Product.low_stock_threshold).count()
+        # Counts use keys-only queries (cheap); comparisons between two
+        # properties (stock vs. threshold) and sums run in Python since
+        # Datastore can't express them.
+        total_users = User.query().count()
+        total_categories = Category.query().count()
+        orders = Order.query().fetch()
+        products = Product.query().fetch()
 
-        revenue = (
-            db.session.query(db.func.coalesce(db.func.sum(Order.total_amount), 0))
-            .filter(Order.payment_status == PaymentStatus.PAID)
-            .scalar()
+        pending_statuses = (OrderStatus.PLACED, OrderStatus.CONFIRMED, OrderStatus.PROCESSING)
+        pending_orders = sum(1 for o in orders if o.order_status in pending_statuses)
+        completed_orders = sum(1 for o in orders if o.order_status == OrderStatus.DELIVERED)
+        online_payments = sum(
+            1 for o in orders if o.payment_method == PaymentMethod.RAZORPAY and o.payment_status == PaymentStatus.PAID
         )
+        cod_orders = sum(1 for o in orders if o.payment_method == PaymentMethod.COD)
+        revenue = sum((o.total_amount for o in orders if o.payment_status == PaymentStatus.PAID), ZERO)
 
-        recent_orders = Order.query.order_by(Order.created_at.desc()).limit(10).all()
-        low_stock_products = (
-            Product.query.filter(Product.stock_quantity > 0, Product.stock_quantity <= Product.low_stock_threshold)
-            .order_by(Product.stock_quantity)
-            .limit(10)
-            .all()
-        )
-        latest_users = User.query.order_by(User.created_at.desc()).limit(10).all()
+        out_of_stock = sum(1 for p in products if p.stock_quantity == 0)
+        low_stock_products = sorted((p for p in products if p.is_low_stock), key=lambda p: p.stock_quantity)
+
+        total_products = len(products)
+        total_orders = len(orders)
+        low_stock = len(low_stock_products)
+        recent_orders = newest_first(orders)[:10]
+        low_stock_products = low_stock_products[:10]
+        latest_users = User.query().order(-User.created_at).fetch(10)
 
         return {
             "total_users": total_users,
@@ -236,7 +234,7 @@ class AdminUserService:
         user.name = form.name.data
         user.role = form.role.data
         user.is_active = form.is_active.data
-        db.session.commit()
+        user.put()
         return user
 
 
@@ -244,23 +242,22 @@ class AdminCouponService:
     @staticmethod
     def create_coupon(form):
         code = form.code.data.strip().upper()
-        if Coupon.query.filter_by(code=code).first():
+        if Coupon.by_code(code):
             raise AdminError(f"Coupon code '{code}' already exists.")
         coupon = Coupon(code=code)
         AdminCouponService._apply(coupon, form)
-        db.session.add(coupon)
-        db.session.commit()
+        coupon.put()
         return coupon
 
     @staticmethod
     def update_coupon(coupon, form):
         code = form.code.data.strip().upper()
-        existing = Coupon.query.filter(Coupon.code == code, Coupon.id != coupon.id).first()
-        if existing:
+        existing = Coupon.by_code(code)
+        if existing and existing.id != coupon.id:
             raise AdminError(f"Coupon code '{code}' already exists.")
         coupon.code = code
         AdminCouponService._apply(coupon, form)
-        db.session.commit()
+        coupon.put()
         return coupon
 
     @staticmethod

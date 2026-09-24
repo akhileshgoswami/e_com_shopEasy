@@ -1,57 +1,48 @@
-from datetime import datetime, timezone
+from google.cloud import ndb
 
-from app.extensions import db
+from app.models.base import BaseModel
 
 
-class Category(db.Model):
-    __tablename__ = "categories"
+class Category(BaseModel):
+    name = ndb.StringProperty(required=True)
+    slug = ndb.StringProperty(required=True)
+    description = ndb.TextProperty()
+    image_url = ndb.TextProperty()
+    is_active = ndb.BooleanProperty(default=True)
+    sort_order = ndb.IntegerProperty(default=0)
 
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(120), nullable=False)
-    slug = db.Column(db.String(140), nullable=False, unique=True, index=True)
-    description = db.Column(db.Text, nullable=True)
-    image_url = db.Column(db.String(500), nullable=True)
-    is_active = db.Column(db.Boolean, nullable=False, default=True)
-    sort_order = db.Column(db.Integer, nullable=False, default=0)
-    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
-    updated_at = db.Column(
-        db.DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
-        nullable=False,
-    )
+    @property
+    def subcategories(self):
+        return sorted(Subcategory.all(Subcategory.category_id == self.id), key=lambda s: s.sort_order)
 
-    subcategories = db.relationship(
-        "Subcategory", back_populates="category", cascade="all, delete-orphan", order_by="Subcategory.sort_order"
-    )
-    products = db.relationship("Product", back_populates="category")
+    @property
+    def products(self):
+        from app.models.product import Product
+
+        return Product.all(Product.category_id == self.id)
 
     def __repr__(self):
         return f"<Category {self.slug}>"
 
 
-class Subcategory(db.Model):
-    __tablename__ = "subcategories"
-    __table_args__ = (db.UniqueConstraint("category_id", "slug", name="uq_subcategory_category_slug"),)
+class Subcategory(BaseModel):
+    category_id = ndb.IntegerProperty(required=True)
+    name = ndb.StringProperty(required=True)
+    slug = ndb.StringProperty(required=True)
+    description = ndb.TextProperty()
+    image_url = ndb.TextProperty()
+    is_active = ndb.BooleanProperty(default=True)
+    sort_order = ndb.IntegerProperty(default=0)
 
-    id = db.Column(db.Integer, primary_key=True)
-    category_id = db.Column(db.Integer, db.ForeignKey("categories.id", ondelete="CASCADE"), nullable=False, index=True)
-    name = db.Column(db.String(120), nullable=False)
-    slug = db.Column(db.String(140), nullable=False, index=True)
-    description = db.Column(db.Text, nullable=True)
-    image_url = db.Column(db.String(500), nullable=True)
-    is_active = db.Column(db.Boolean, nullable=False, default=True)
-    sort_order = db.Column(db.Integer, nullable=False, default=0)
-    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
-    updated_at = db.Column(
-        db.DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
-        nullable=False,
-    )
+    @property
+    def category(self):
+        return Category.find(self.category_id)
 
-    category = db.relationship("Category", back_populates="subcategories")
-    products = db.relationship("Product", back_populates="subcategory")
+    @property
+    def products(self):
+        from app.models.product import Product
+
+        return Product.all(Product.subcategory_id == self.id)
 
     def __repr__(self):
         return f"<Subcategory {self.slug}>"

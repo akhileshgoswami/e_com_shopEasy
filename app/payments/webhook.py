@@ -3,8 +3,9 @@ import json
 import logging
 
 from flask import request
+from google.cloud import ndb
 
-from app.extensions import csrf, db
+from app.extensions import csrf
 from app.models import Order, Payment, WebhookEvent
 from app.payments import payments_bp
 from app.payments.razorpay_service import RazorpayError, RazorpayService
@@ -37,7 +38,7 @@ def razorpay_webhook():
     event_type = payload.get("event", "unknown")
     event_id = request.headers.get("X-Razorpay-Event-Id") or hashlib.sha256(raw_body).hexdigest()
 
-    if WebhookEvent.query.filter_by(event_id=event_id).first():
+    if WebhookEvent.get_by_id(event_id):
         logger.info("Duplicate Razorpay webhook ignored: event_id=%s type=%s", event_id, event_type)
         return {"status": "already processed"}, 200
 
@@ -50,10 +51,9 @@ def razorpay_webhook():
     else:
         logger.info("Unhandled Razorpay webhook event type ignored: %s", event_type)
 
-    db.session.add(
-        WebhookEvent(provider="razorpay", event_id=event_id, event_type=event_type, payload=raw_body.decode("utf-8", "ignore")[:5000])
-    )
-    db.session.commit()
+    WebhookEvent(
+        id=event_id, provider="razorpay", event_type=event_type, payload=raw_body.decode("utf-8", "ignore")[:5000]
+    ).put()
 
     return {"status": "ok"}, 200
 
@@ -67,21 +67,23 @@ def _process_event(event_type, payload):
         logger.warning("Razorpay webhook missing order id: type=%s", event_type)
         return
 
-    order = Order.query.filter_by(razorpay_order_id=razorpay_order_id).first()
+    order = Order.first(Order.razorpay_order_id == razorpay_order_id)
     if order is None:
         logger.warning("Razorpay webhook references unknown order: razorpay_order_id=%s", razorpay_order_id)
         return
 
-    payment = Payment.query.filter_by(order_id=order.id, provider="razorpay").first()
+    payment = Payment.for_order(order.id, "razorpay")
 
     if event_type in ("payment.captured", "order.paid"):
+        order.razorpay_payment_id = order.razorpay_payment_id or razorpay_payment_id
+        to_put = [order]
         if payment:
             payment.provider_payment_id = razorpay_payment_id
             payment.status = "paid"
             payment.signature_verified = True
             payment.raw_reference = json.dumps(entity)
-        order.razorpay_payment_id = order.razorpay_payment_id or razorpay_payment_id
-        db.session.commit()
+            to_put.append(payment)
+        ndb.put_multi(to_put)
         OrderService.mark_paid(order)
         logger.info("Webhook confirmed payment: order_number=%s", order.order_number)
 
@@ -90,6 +92,6 @@ def _process_event(event_type, payload):
         if payment:
             payment.status = "failed"
             payment.raw_reference = reason
-            db.session.commit()
+            payment.put()
         OrderService.mark_payment_failed(order, note=reason)
         logger.info("Webhook confirmed payment failure: order_number=%s", order.order_number)

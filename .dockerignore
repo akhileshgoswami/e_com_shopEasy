@@ -15,3 +15,5 @@ terraform/*.tfstate*
 node_modules
 scratchpad
 .DS_Store
+.env.*
+!.env.example

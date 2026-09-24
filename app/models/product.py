@@ -1,43 +1,45 @@
-from datetime import datetime, timezone
+from google.cloud import ndb
 
-from app.extensions import db
+from app.models.base import BaseModel, DecimalProperty
 
 
-class Product(db.Model):
-    __tablename__ = "products"
+class Product(BaseModel):
+    category_id = ndb.IntegerProperty(required=True)
+    subcategory_id = ndb.IntegerProperty()
+    name = ndb.StringProperty(required=True)
+    slug = ndb.StringProperty(required=True)
+    sku = ndb.StringProperty(required=True)
+    short_description = ndb.TextProperty()
+    description = ndb.TextProperty()
+    price = DecimalProperty(required=True)
+    sale_price = DecimalProperty()
+    stock_quantity = ndb.IntegerProperty(default=0)
+    low_stock_threshold = ndb.IntegerProperty(default=5)
+    image_url = ndb.TextProperty()
+    is_active = ndb.BooleanProperty(default=True)
 
-    id = db.Column(db.Integer, primary_key=True)
-    category_id = db.Column(db.Integer, db.ForeignKey("categories.id"), nullable=False, index=True)
-    subcategory_id = db.Column(db.Integer, db.ForeignKey("subcategories.id"), nullable=True, index=True)
-    name = db.Column(db.String(200), nullable=False)
-    slug = db.Column(db.String(220), nullable=False, unique=True, index=True)
-    sku = db.Column(db.String(64), nullable=False, unique=True, index=True)
-    short_description = db.Column(db.String(500), nullable=True)
-    description = db.Column(db.Text, nullable=True)
-    price = db.Column(db.Numeric(10, 2), nullable=False)
-    sale_price = db.Column(db.Numeric(10, 2), nullable=True)
-    stock_quantity = db.Column(db.Integer, nullable=False, default=0)
-    low_stock_threshold = db.Column(db.Integer, nullable=False, default=5)
-    image_url = db.Column(db.String(500), nullable=True)
-    is_active = db.Column(db.Boolean, nullable=False, default=True)
-    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
-    updated_at = db.Column(
-        db.DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
-        nullable=False,
-    )
+    def _pre_put_hook(self):
+        # Mirrors the old SQL CHECK constraints.
+        if self.stock_quantity is not None and self.stock_quantity < 0:
+            raise ValueError("stock_quantity cannot be negative.")
+        if self.price is not None and self.price < 0:
+            raise ValueError("price cannot be negative.")
 
-    __table_args__ = (
-        db.CheckConstraint("stock_quantity >= 0", name="ck_product_stock_nonnegative"),
-        db.CheckConstraint("price >= 0", name="ck_product_price_nonnegative"),
-    )
+    @property
+    def category(self):
+        from app.models.category import Category
 
-    category = db.relationship("Category", back_populates="products")
-    subcategory = db.relationship("Subcategory", back_populates="products")
-    images = db.relationship(
-        "ProductImage", back_populates="product", cascade="all, delete-orphan", order_by="ProductImage.sort_order"
-    )
+        return Category.find(self.category_id)
+
+    @property
+    def subcategory(self):
+        from app.models.category import Subcategory
+
+        return Subcategory.find(self.subcategory_id)
+
+    @property
+    def images(self):
+        return sorted(ProductImage.all(ProductImage.product_id == self.id), key=lambda i: i.sort_order)
 
     @property
     def effective_price(self):
@@ -67,17 +69,15 @@ class Product(db.Model):
         return f"<Product {self.slug}>"
 
 
-class ProductImage(db.Model):
-    __tablename__ = "product_images"
+class ProductImage(BaseModel):
+    product_id = ndb.IntegerProperty(required=True)
+    image_url = ndb.TextProperty(required=True)
+    storage_path = ndb.TextProperty(required=True)
+    sort_order = ndb.IntegerProperty(default=0)
 
-    id = db.Column(db.Integer, primary_key=True)
-    product_id = db.Column(db.Integer, db.ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
-    image_url = db.Column(db.String(500), nullable=False)
-    storage_path = db.Column(db.String(500), nullable=False)
-    sort_order = db.Column(db.Integer, nullable=False, default=0)
-    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
-
-    product = db.relationship("Product", back_populates="images")
+    @property
+    def product(self):
+        return Product.find(self.product_id)
 
     def __repr__(self):
         return f"<ProductImage {self.id} product={self.product_id}>"

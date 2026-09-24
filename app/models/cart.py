@@ -1,50 +1,43 @@
-from datetime import datetime, timezone
+from google.cloud import ndb
 
-from app.extensions import db
+from app.models.base import BaseModel, DecimalProperty
 
 
-class Cart(db.Model):
-    __tablename__ = "carts"
+class Cart(BaseModel):
+    """One per user; the entity id *is* the user id, so the lookup is a
+    direct key get and a second cart for the same user can't exist."""
 
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
-    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
-    updated_at = db.Column(
-        db.DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
-        nullable=False,
-    )
+    user_id = ndb.IntegerProperty(required=True)
 
-    user = db.relationship("User", back_populates="cart")
-    items = db.relationship("CartItem", back_populates="cart", cascade="all, delete-orphan")
+    @property
+    def user(self):
+        from app.models.user import User
+
+        return User.find(self.user_id)
+
+    @property
+    def items(self):
+        return CartItem.all(CartItem.cart_id == self.id)
 
     def __repr__(self):
         return f"<Cart {self.id} user={self.user_id}>"
 
 
-class CartItem(db.Model):
-    __tablename__ = "cart_items"
-    __table_args__ = (
-        db.UniqueConstraint("cart_id", "product_id", name="uq_cart_item_product"),
-        db.CheckConstraint("quantity > 0", name="ck_cart_item_qty_positive"),
-    )
+class CartItem(BaseModel):
+    cart_id = ndb.IntegerProperty(required=True)
+    product_id = ndb.IntegerProperty(required=True)
+    quantity = ndb.IntegerProperty(default=1, indexed=False)
+    unit_price = DecimalProperty(required=True, indexed=False)
 
-    id = db.Column(db.Integer, primary_key=True)
-    cart_id = db.Column(db.Integer, db.ForeignKey("carts.id", ondelete="CASCADE"), nullable=False, index=True)
-    product_id = db.Column(db.Integer, db.ForeignKey("products.id"), nullable=False, index=True)
-    quantity = db.Column(db.Integer, nullable=False, default=1)
-    unit_price = db.Column(db.Numeric(10, 2), nullable=False)
-    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
-    updated_at = db.Column(
-        db.DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
-        nullable=False,
-    )
+    def _pre_put_hook(self):
+        if self.quantity is None or self.quantity < 1:
+            raise ValueError("Cart item quantity must be positive.")
 
-    cart = db.relationship("Cart", back_populates="items")
-    product = db.relationship("Product")
+    @property
+    def product(self):
+        from app.models.product import Product
+
+        return Product.find(self.product_id)
 
     @property
     def subtotal(self):

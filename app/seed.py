@@ -1,6 +1,5 @@
 from decimal import Decimal
 
-from app.extensions import db
 from app.models import Category, Product, Subcategory
 from app.shop.services import CategoryService, ProductService
 
@@ -49,7 +48,7 @@ SEED_CATALOG = {
 
 def run_seed_data():
     for cat_index, (cat_name, cat_data) in enumerate(SEED_CATALOG.items()):
-        category = Category.query.filter_by(name=cat_name).first()
+        category = Category.first(Category.name == cat_name)
         if category is None:
             category = Category(
                 name=cat_name,
@@ -58,11 +57,10 @@ def run_seed_data():
                 is_active=True,
                 sort_order=cat_index,
             )
-            db.session.add(category)
-            db.session.flush()
+            category.put()
 
         for sub_index, (sub_name, products) in enumerate(cat_data["subcategories"].items()):
-            subcategory = Subcategory.query.filter_by(category_id=category.id, name=sub_name).first()
+            subcategory = Subcategory.first(Subcategory.category_id == category.id, Subcategory.name == sub_name)
             if subcategory is None:
                 subcategory = Subcategory(
                     category_id=category.id,
@@ -72,12 +70,11 @@ def run_seed_data():
                     is_active=True,
                     sort_order=sub_index,
                 )
-                db.session.add(subcategory)
-                db.session.flush()
+                subcategory.put()
 
             for prod_index, item in enumerate(products):
                 sku = f"{category.slug[:3].upper()}-{subcategory.slug[:3].upper()}-{prod_index + 1:03d}"
-                existing = Product.query.filter_by(sku=sku).first()
+                existing = Product.first(Product.sku == sku)
                 if existing:
                     continue
                 product = Product(
@@ -94,6 +91,4 @@ def run_seed_data():
                     low_stock_threshold=5,
                     is_active=True,
                 )
-                db.session.add(product)
-
-    db.session.commit()
+                product.put()

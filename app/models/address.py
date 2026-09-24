@@ -1,31 +1,42 @@
-from datetime import datetime, timezone
+from google.cloud import ndb
 
-from app.extensions import db
+from app.models.base import BaseModel
 
 
-class Address(db.Model):
-    __tablename__ = "addresses"
+class Address(BaseModel):
+    user_id = ndb.IntegerProperty(required=True)
+    full_name = ndb.TextProperty(required=True)
+    phone = ndb.TextProperty(required=True)
+    address_line_1 = ndb.TextProperty(required=True)
+    address_line_2 = ndb.TextProperty()
+    city = ndb.TextProperty(required=True)
+    state = ndb.TextProperty(required=True)
+    postal_code = ndb.TextProperty(required=True)
+    country = ndb.TextProperty(default="India")
+    is_default = ndb.BooleanProperty(default=False)
 
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    full_name = db.Column(db.String(120), nullable=False)
-    phone = db.Column(db.String(20), nullable=False)
-    address_line_1 = db.Column(db.String(255), nullable=False)
-    address_line_2 = db.Column(db.String(255), nullable=True)
-    city = db.Column(db.String(100), nullable=False)
-    state = db.Column(db.String(100), nullable=False)
-    postal_code = db.Column(db.String(20), nullable=False)
-    country = db.Column(db.String(100), nullable=False, default="India")
-    is_default = db.Column(db.Boolean, nullable=False, default=False)
-    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
-    updated_at = db.Column(
-        db.DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
-        nullable=False,
-    )
+    @classmethod
+    def for_user(cls, user_id):
+        """Default address first, then newest."""
+        return sorted(cls.all(cls.user_id == user_id), key=lambda a: (not a.is_default, -a.id))
 
-    user = db.relationship("User", back_populates="addresses")
+    @classmethod
+    def owned_by(cls, address_id, user_id):
+        address = cls.find(address_id)
+        return address if address is not None and address.user_id == user_id else None
+
+    @classmethod
+    def clear_default(cls, user_id, except_id=None):
+        others = [a for a in cls.all(cls.user_id == user_id, cls.is_default == True) if a.id != except_id]  # noqa: E712
+        for a in others:
+            a.is_default = False
+        ndb.put_multi(others)
+
+    @property
+    def user(self):
+        from app.models.user import User
+
+        return User.find(self.user_id)
 
     def __repr__(self):
         return f"<Address {self.id} user={self.user_id}>"

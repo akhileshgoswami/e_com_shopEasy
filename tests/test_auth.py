@@ -10,10 +10,10 @@ def register(client, email="new@example.com", password="Passw0rd!"):
     )
 
 
-def test_registration_creates_customer(client, db):
+def test_registration_creates_customer(client):
     resp = register(client)
     assert resp.status_code == 200
-    user = User.query.filter_by(email="new@example.com").first()
+    user = User.first(User.email == "new@example.com")
     assert user is not None
     assert user.role == Role.CUSTOMER
     assert user.check_password("Passw0rd!")
@@ -35,7 +35,7 @@ def test_login_wrong_password(client, customer):
     assert b"Invalid email or password" in resp.data
 
 
-def test_login_lockout_after_repeated_failures(client, customer, db):
+def test_login_lockout_after_repeated_failures(client, customer):
     for _ in range(5):
         client.post("/login", data={"email": customer.email, "password": "wrong"})
     resp = client.post("/login", data={"email": customer.email, "password": "Passw0rd!"}, follow_redirects=True)

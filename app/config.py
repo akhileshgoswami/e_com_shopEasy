@@ -7,46 +7,27 @@ def _bool(value, default=False):
     return str(value).strip().lower() in ("1", "true", "yes", "on")
 
 
-def _build_database_url():
-    """Build DATABASE_URL, preferring a Cloud SQL unix socket connection
-    on Cloud Run (when INSTANCE_CONNECTION_NAME is set) over a plain URL."""
-    instance_connection_name = os.environ.get("INSTANCE_CONNECTION_NAME")
-    if instance_connection_name:
-        db_user = os.environ["DB_USER"]
-        db_password = os.environ["DB_PASSWORD"]
-        db_name = os.environ["DB_NAME"]
-        socket_path = f"/cloudsql/{instance_connection_name}"
-        return (
-            f"postgresql+psycopg2://{db_user}:{db_password}@/{db_name}"
-            f"?host={socket_path}"
-        )
-    return os.environ.get("DATABASE_URL")
-
-
 class BaseConfig:
     SECRET_KEY = os.environ.get("SECRET_KEY")
     BASE_URL = os.environ.get("BASE_URL", "http://localhost:5000")
     PORT = int(os.environ.get("PORT", 5000))
     FLASK_ENV = os.environ.get("FLASK_ENV", "development")
 
-    SQLALCHEMY_DATABASE_URI = _build_database_url()
-    SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SQLALCHEMY_ENGINE_OPTIONS = {
-        "pool_pre_ping": True,
-        "pool_size": int(os.environ.get("DB_POOL_SIZE", 5)),
-        "max_overflow": int(os.environ.get("DB_MAX_OVERFLOW", 2)),
-        "pool_recycle": int(os.environ.get("DB_POOL_RECYCLE", 1800)),
-        "pool_timeout": int(os.environ.get("DB_POOL_TIMEOUT", 30)),
-    }
-
     WTF_CSRF_ENABLED = _bool(os.environ.get("WTF_CSRF_ENABLED"), True)
 
+    # Unique name so other apps on localhost (cookies ignore the port) can't
+    # overwrite our session mid-login — that surfaces as OAuth "mismatching_state".
+    SESSION_COOKIE_NAME = os.environ.get("SESSION_COOKIE_NAME", "shopeasy_session")
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
     SESSION_COOKIE_SECURE = _bool(os.environ.get("SESSION_COOKIE_SECURE"), False)
     REMEMBER_COOKIE_HTTPONLY = True
     REMEMBER_COOKIE_SAMESITE = "Lax"
     REMEMBER_COOKIE_SECURE = _bool(os.environ.get("SESSION_COOKIE_SECURE"), False)
+    # Behind Cloud Run / a load balancer, trust one hop of X-Forwarded-* so
+    # url_for(_external=True) builds https:// URLs (Google OAuth redirect_uri
+    # must match exactly what's registered in Google Cloud Console).
+    TRUST_PROXY_HEADERS = _bool(os.environ.get("TRUST_PROXY_HEADERS"), False)
     REMEMBER_COOKIE_DURATION_DAYS = 14
 
     RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID")
@@ -54,7 +35,9 @@ class BaseConfig:
     RAZORPAY_WEBHOOK_SECRET = os.environ.get("RAZORPAY_WEBHOOK_SECRET")
     RAZORPAY_CURRENCY = os.environ.get("RAZORPAY_CURRENCY", "INR")
 
-    GOOGLE_CLOUD_PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT")
+    # DATASTORE_PROJECT_ID is what the Datastore emulator uses locally; on
+    # Cloud Run GOOGLE_CLOUD_PROJECT is set by the deploy script.
+    GOOGLE_CLOUD_PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT") or os.environ.get("DATASTORE_PROJECT_ID")
     GCS_BUCKET_NAME = os.environ.get("GCS_BUCKET_NAME")
     GCS_ENABLED = _bool(os.environ.get("GCS_ENABLED"), False)
 
@@ -98,10 +81,6 @@ class BaseConfig:
 
 class DevelopmentConfig(BaseConfig):
     DEBUG = True
-    if not BaseConfig.SQLALCHEMY_DATABASE_URI:
-        SQLALCHEMY_DATABASE_URI = "sqlite:///" + os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "dev.db"
-        )
     if not BaseConfig.SECRET_KEY:
         SECRET_KEY = "dev-secret-key-not-for-production"
 
@@ -110,19 +89,22 @@ class TestingConfig(BaseConfig):
     TESTING = True
     DEBUG = True
     WTF_CSRF_ENABLED = False
-    SQLALCHEMY_DATABASE_URI = os.environ.get("TEST_DATABASE_URL", "sqlite:///:memory:")
-    SQLALCHEMY_ENGINE_OPTIONS = {}
+    GOOGLE_CLOUD_PROJECT = os.environ.get("DATASTORE_PROJECT_ID", "e-com-test")
     SECRET_KEY = "test-secret-key"
     RATELIMIT_ENABLED = False
     MAIL_ENABLED = False
     RAZORPAY_KEY_ID = "rzp_test_key_id"
     RAZORPAY_KEY_SECRET = "rzp_test_key_secret"
     RAZORPAY_WEBHOOK_SECRET = "test_webhook_secret"
+    # Ignore any real OAuth app in the developer's .env; tests opt in explicitly.
+    GOOGLE_OAUTH_CLIENT_ID = None
+    GOOGLE_OAUTH_CLIENT_SECRET = None
     SESSION_COOKIE_SECURE = False
     REMEMBER_COOKIE_SECURE = False
 
 
 class ProductionConfig(BaseConfig):
+    TRUST_PROXY_HEADERS = _bool(os.environ.get("TRUST_PROXY_HEADERS"), True)
     DEBUG = False
     SESSION_COOKIE_SECURE = True
     REMEMBER_COOKIE_SECURE = True
@@ -130,14 +112,12 @@ class ProductionConfig(BaseConfig):
     @staticmethod
     def init_app(app):
         BaseConfig.init_app(app)
-        required = ["SECRET_KEY", "SQLALCHEMY_DATABASE_URI"]
+        required = ["SECRET_KEY"]
         missing = [name for name in required if not app.config.get(name)]
         if missing:
             raise RuntimeError(
                 f"Missing required production configuration: {', '.join(missing)}"
             )
-        if app.config["SQLALCHEMY_DATABASE_URI"].startswith("sqlite"):
-            raise RuntimeError("SQLite is not allowed in production. Use PostgreSQL.")
         if not app.config.get("RAZORPAY_KEY_ID") or not app.config.get("RAZORPAY_KEY_SECRET"):
             app.logger.warning("Razorpay keys are not configured; online payments will fail.")
 

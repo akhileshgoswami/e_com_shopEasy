@@ -28,9 +28,16 @@ from app.admin.services import (
     DashboardService,
 )
 from app.auth.services import AuthError, AuthenticationService
-from app.extensions import db, limiter
+from app.extensions import limiter
 from app.models import Category, Coupon, Order, OrderStatus, Payment, Product, ProductImage, Subcategory, User
 from app.storage import UnsupportedFileError
+from app.utils import Pagination, contains_text, newest_first
+
+ADMIN_PER_PAGE = 20
+
+
+def _by_name(entities):
+    return sorted(entities, key=lambda e: e.name.lower())
 
 
 def admin_required(view):
@@ -88,10 +95,11 @@ def dashboard():
 def categories():
     page = request.args.get("page", 1, type=int)
     q = request.args.get("q", "").strip()
-    query = Category.query
+    categories = Category.all()
     if q:
-        query = query.filter(Category.name.ilike(f"%{q}%"))
-    pagination = query.order_by(Category.sort_order, Category.name).paginate(page=page, per_page=20, error_out=False)
+        categories = [c for c in categories if contains_text(q, c.name)]
+    categories = sorted(categories, key=lambda c: (c.sort_order, c.name))
+    pagination = Pagination(categories, page, ADMIN_PER_PAGE)
     return render_template("admin/categories_list.html", pagination=pagination, categories=pagination.items, q=q)
 
 
@@ -112,7 +120,7 @@ def category_new():
 @admin_bp.route("/categories/<int:category_id>/edit", methods=["GET", "POST"])
 @admin_required
 def category_edit(category_id):
-    category = Category.query.get_or_404(category_id)
+    category = Category.find_or_404(category_id)
     form = CategoryForm(obj=category)
     if form.validate_on_submit():
         try:
@@ -127,7 +135,7 @@ def category_edit(category_id):
 @admin_bp.route("/categories/<int:category_id>/delete", methods=["POST"])
 @admin_required
 def category_delete(category_id):
-    category = Category.query.get_or_404(category_id)
+    category = Category.find_or_404(category_id)
     AdminCategoryService.delete_category(category)
     flash("Category deactivated.", "info")
     return redirect(url_for("admin.categories"))
@@ -141,13 +149,12 @@ def subcategories():
     page = request.args.get("page", 1, type=int)
     q = request.args.get("q", "").strip()
     category_id = request.args.get("category_id", type=int)
-    query = Subcategory.query
+    subcategories = Subcategory.all(Subcategory.category_id == category_id) if category_id else Subcategory.all()
     if q:
-        query = query.filter(Subcategory.name.ilike(f"%{q}%"))
-    if category_id:
-        query = query.filter(Subcategory.category_id == category_id)
-    pagination = query.order_by(Subcategory.sort_order, Subcategory.name).paginate(page=page, per_page=20, error_out=False)
-    all_categories = Category.query.order_by(Category.name).all()
+        subcategories = [s for s in subcategories if contains_text(q, s.name)]
+    subcategories = sorted(subcategories, key=lambda s: (s.sort_order, s.name))
+    pagination = Pagination(subcategories, page, ADMIN_PER_PAGE)
+    all_categories = _by_name(Category.all())
     return render_template(
         "admin/subcategories_list.html",
         pagination=pagination,
@@ -162,7 +169,7 @@ def subcategories():
 @admin_required
 def subcategory_new():
     form = SubcategoryForm()
-    form.category_id.choices = [(c.id, c.name) for c in Category.query.order_by(Category.name).all()]
+    form.category_id.choices = [(c.id, c.name) for c in _by_name(Category.all())]
     if form.validate_on_submit():
         try:
             AdminCategoryService.create_subcategory(form)
@@ -176,9 +183,9 @@ def subcategory_new():
 @admin_bp.route("/subcategories/<int:subcategory_id>/edit", methods=["GET", "POST"])
 @admin_required
 def subcategory_edit(subcategory_id):
-    subcategory = Subcategory.query.get_or_404(subcategory_id)
+    subcategory = Subcategory.find_or_404(subcategory_id)
     form = SubcategoryForm(obj=subcategory)
-    form.category_id.choices = [(c.id, c.name) for c in Category.query.order_by(Category.name).all()]
+    form.category_id.choices = [(c.id, c.name) for c in _by_name(Category.all())]
     if form.validate_on_submit():
         try:
             AdminCategoryService.update_subcategory(subcategory, form)
@@ -192,7 +199,7 @@ def subcategory_edit(subcategory_id):
 @admin_bp.route("/subcategories/<int:subcategory_id>/delete", methods=["POST"])
 @admin_required
 def subcategory_delete(subcategory_id):
-    subcategory = Subcategory.query.get_or_404(subcategory_id)
+    subcategory = Subcategory.find_or_404(subcategory_id)
     AdminCategoryService.delete_subcategory(subcategory)
     flash("Subcategory deactivated.", "info")
     return redirect(url_for("admin.subcategories"))
@@ -206,26 +213,28 @@ def products():
     page = request.args.get("page", 1, type=int)
     q = request.args.get("q", "").strip()
     status = request.args.get("status", "")
-    query = Product.query
+    products = Product.all()
     if q:
-        query = query.filter(db.or_(Product.name.ilike(f"%{q}%"), Product.sku.ilike(f"%{q}%")))
+        products = [p for p in products if contains_text(q, p.name, p.sku)]
     if status == "active":
-        query = query.filter(Product.is_active.is_(True))
+        products = [p for p in products if p.is_active]
     elif status == "inactive":
-        query = query.filter(Product.is_active.is_(False))
+        products = [p for p in products if not p.is_active]
     elif status == "out_of_stock":
-        query = query.filter(Product.stock_quantity == 0)
+        products = [p for p in products if p.stock_quantity == 0]
     elif status == "low_stock":
-        query = query.filter(Product.stock_quantity > 0, Product.stock_quantity <= Product.low_stock_threshold)
+        products = [p for p in products if p.is_low_stock]
 
-    pagination = query.order_by(Product.created_at.desc()).paginate(page=page, per_page=20, error_out=False)
+    pagination = Pagination(newest_first(products), page, ADMIN_PER_PAGE)
     return render_template("admin/products_list.html", pagination=pagination, products=pagination.items, q=q, status=status)
 
 
 def _populate_product_choices(form):
-    form.category_id.choices = [(c.id, c.name) for c in Category.query.order_by(Category.name).all()]
+    categories = _by_name(Category.all())
+    names = {c.id: c.name for c in categories}
+    form.category_id.choices = [(c.id, c.name) for c in categories]
     form.subcategory_id.choices = [(0, "-- none --")] + [
-        (s.id, f"{s.category.name} / {s.name}") for s in Subcategory.query.order_by(Subcategory.name).all()
+        (s.id, f"{names.get(s.category_id, '?')} / {s.name}") for s in _by_name(Subcategory.all())
     ]
 
 
@@ -247,7 +256,7 @@ def product_new():
 @admin_bp.route("/products/<int:product_id>/edit", methods=["GET", "POST"])
 @admin_required
 def product_edit(product_id):
-    product = Product.query.get_or_404(product_id)
+    product = Product.find_or_404(product_id)
     form = ProductForm(obj=product)
     _populate_product_choices(form)
     if request.method == "GET":
@@ -268,7 +277,7 @@ def product_edit(product_id):
 @admin_bp.route("/products/<int:product_id>/toggle-active", methods=["POST"])
 @admin_required
 def product_toggle_active(product_id):
-    product = Product.query.get_or_404(product_id)
+    product = Product.find_or_404(product_id)
     AdminProductService.toggle_active(product)
     flash(f"Product {'activated' if product.is_active else 'deactivated'}.", "success")
     return redirect(url_for("admin.products"))
@@ -277,7 +286,7 @@ def product_toggle_active(product_id):
 @admin_bp.route("/products/<int:product_id>/images", methods=["POST"])
 @admin_required
 def product_image_upload(product_id):
-    product = Product.query.get_or_404(product_id)
+    product = Product.find_or_404(product_id)
     form = ProductImageForm()
     if form.validate_on_submit():
         try:
@@ -290,11 +299,18 @@ def product_image_upload(product_id):
     return redirect(url_for("admin.product_edit", product_id=product.id))
 
 
+def _product_image_or_404(product, image_id):
+    image = ProductImage.find(image_id)
+    if image is None or image.product_id != product.id:
+        abort(404)
+    return image
+
+
 @admin_bp.route("/products/<int:product_id>/images/<int:image_id>/set-main", methods=["POST"])
 @admin_required
 def product_image_set_main(product_id, image_id):
-    product = Product.query.get_or_404(product_id)
-    image = ProductImage.query.filter_by(id=image_id, product_id=product.id).first_or_404()
+    product = Product.find_or_404(product_id)
+    image = _product_image_or_404(product, image_id)
     AdminProductService.set_main_image(product, image)
     flash("Main image updated.", "success")
     return redirect(url_for("admin.product_edit", product_id=product.id))
@@ -303,8 +319,8 @@ def product_image_set_main(product_id, image_id):
 @admin_bp.route("/products/<int:product_id>/images/<int:image_id>/delete", methods=["POST"])
 @admin_required
 def product_image_delete(product_id, image_id):
-    product = Product.query.get_or_404(product_id)
-    image = ProductImage.query.filter_by(id=image_id, product_id=product.id).first_or_404()
+    product = Product.find_or_404(product_id)
+    image = _product_image_or_404(product, image_id)
     AdminProductService.delete_image(product, image)
     flash("Image deleted.", "info")
     return redirect(url_for("admin.product_edit", product_id=product.id))
@@ -317,19 +333,19 @@ def product_image_delete(product_id, image_id):
 def inventory():
     page = request.args.get("page", 1, type=int)
     filter_type = request.args.get("filter", "")
-    query = Product.query
+    products = Product.all()
     if filter_type == "out_of_stock":
-        query = query.filter(Product.stock_quantity == 0)
+        products = [p for p in products if p.stock_quantity == 0]
     elif filter_type == "low_stock":
-        query = query.filter(Product.stock_quantity > 0, Product.stock_quantity <= Product.low_stock_threshold)
-    pagination = query.order_by(Product.stock_quantity).paginate(page=page, per_page=20, error_out=False)
+        products = [p for p in products if p.is_low_stock]
+    pagination = Pagination(sorted(products, key=lambda p: p.stock_quantity), page, ADMIN_PER_PAGE)
     return render_template("admin/inventory_list.html", pagination=pagination, products=pagination.items, filter_type=filter_type)
 
 
 @admin_bp.route("/inventory/<int:product_id>/update", methods=["POST"])
 @admin_required
 def inventory_update(product_id):
-    product = Product.query.get_or_404(product_id)
+    product = Product.find_or_404(product_id)
     form = StockUpdateForm()
     if form.validate_on_submit():
         AdminProductService.update_stock(product, form.stock_quantity.data, form.low_stock_threshold.data)
@@ -349,17 +365,22 @@ def orders():
     payment_method = request.args.get("payment_method", "")
     q = request.args.get("q", "").strip()
 
-    query = Order.query
+    filters = []
     if status:
-        query = query.filter(Order.order_status == status)
+        filters.append(Order.order_status == status)
     if payment_method:
-        query = query.filter(Order.payment_method == payment_method)
+        filters.append(Order.payment_method == payment_method)
+    orders = Order.all(*filters)
     if q:
-        query = query.join(User).filter(
-            db.or_(Order.order_number.ilike(f"%{q}%"), User.email.ilike(f"%{q}%"), User.name.ilike(f"%{q}%"))
-        )
+        users = User.find_many({o.user_id for o in orders})
 
-    pagination = query.order_by(Order.created_at.desc()).paginate(page=page, per_page=20, error_out=False)
+        def matches(order):
+            user = users.get(order.user_id)
+            return contains_text(q, order.order_number, user.email if user else "", user.name if user else "")
+
+        orders = [o for o in orders if matches(o)]
+
+    pagination = Pagination(newest_first(orders), page, ADMIN_PER_PAGE)
     return render_template(
         "admin/orders_list.html",
         pagination=pagination,
@@ -374,7 +395,7 @@ def orders():
 @admin_bp.route("/orders/<int:order_id>")
 @admin_required
 def order_detail(order_id):
-    order = Order.query.get_or_404(order_id)
+    order = Order.find_or_404(order_id)
     form = OrderStatusForm()
     allowed = OrderStatus.TRANSITIONS.get(order.order_status, ())
     form.new_status.choices = [(s, s.replace("_", " ").title()) for s in allowed]
@@ -386,7 +407,7 @@ def order_detail(order_id):
 def order_status_update(order_id):
     from app.services.order_service import OrderService, OrderTransitionError
 
-    order = Order.query.get_or_404(order_id)
+    order = Order.find_or_404(order_id)
     form = OrderStatusForm()
     allowed = OrderStatus.TRANSITIONS.get(order.order_status, ())
     form.new_status.choices = [(s, s.replace("_", " ").title()) for s in allowed]
@@ -407,7 +428,7 @@ def order_status_update(order_id):
 def order_collect_payment(order_id):
     from app.services.order_service import OrderService, PaymentCollectionError
 
-    order = Order.query.get_or_404(order_id)
+    order = Order.find_or_404(order_id)
     try:
         OrderService.mark_cod_payment_collected(order, changed_by=current_user.email)
         flash("Payment marked as collected.", "success")
@@ -423,10 +444,8 @@ def order_collect_payment(order_id):
 def payments():
     page = request.args.get("page", 1, type=int)
     status = request.args.get("status", "")
-    query = Payment.query
-    if status:
-        query = query.filter(Payment.status == status)
-    pagination = query.order_by(Payment.created_at.desc()).paginate(page=page, per_page=20, error_out=False)
+    payments = Payment.all(Payment.status == status) if status else Payment.all()
+    pagination = Pagination(newest_first(payments), page, ADMIN_PER_PAGE)
     return render_template("admin/payments_list.html", pagination=pagination, payments=pagination.items, status=status)
 
 
@@ -437,17 +456,17 @@ def payments():
 def users():
     page = request.args.get("page", 1, type=int)
     q = request.args.get("q", "").strip()
-    query = User.query
+    users = User.all()
     if q:
-        query = query.filter(db.or_(User.name.ilike(f"%{q}%"), User.email.ilike(f"%{q}%")))
-    pagination = query.order_by(User.created_at.desc()).paginate(page=page, per_page=20, error_out=False)
+        users = [u for u in users if contains_text(q, u.name, u.email)]
+    pagination = Pagination(newest_first(users), page, ADMIN_PER_PAGE)
     return render_template("admin/users_list.html", pagination=pagination, users=pagination.items, q=q)
 
 
 @admin_bp.route("/users/<int:user_id>/edit", methods=["GET", "POST"])
 @admin_required
 def user_edit(user_id):
-    user = User.query.get_or_404(user_id)
+    user = User.find_or_404(user_id)
     form = UserEditForm(obj=user)
     if form.validate_on_submit():
         if user.id == current_user.id and form.role.data != "admin":
@@ -465,7 +484,7 @@ def user_edit(user_id):
 @admin_required
 def coupons():
     page = request.args.get("page", 1, type=int)
-    pagination = Coupon.query.order_by(Coupon.created_at.desc()).paginate(page=page, per_page=20, error_out=False)
+    pagination = Pagination(newest_first(Coupon.all()), page, ADMIN_PER_PAGE)
     return render_template("admin/coupons_list.html", pagination=pagination, coupons=pagination.items)
 
 
@@ -486,7 +505,7 @@ def coupon_new():
 @admin_bp.route("/coupons/<int:coupon_id>/edit", methods=["GET", "POST"])
 @admin_required
 def coupon_edit(coupon_id):
-    coupon = Coupon.query.get_or_404(coupon_id)
+    coupon = Coupon.find_or_404(coupon_id)
     form = CouponForm(obj=coupon)
     if form.validate_on_submit():
         try:
@@ -619,7 +638,7 @@ def homepage_sections():
 
     layout = HomeSectionsService.get_layout()
     stats = order_stats()
-    products = Product.query.filter_by(is_active=True).order_by(Product.name).all()
+    products = _by_name(Product.all(Product.is_active == True))  # noqa: E712
     catalog = [
         {
             "id": p.id,

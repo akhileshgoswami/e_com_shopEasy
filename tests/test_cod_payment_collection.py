@@ -1,16 +1,16 @@
 from app.models import Order, OrderStatus, PaymentStatus
 from app.services.order_service import OrderService, PaymentCollectionError
-from tests.conftest import admin_login, login
+from tests.conftest import admin_login, login, reload
 
 
 def _place_cod_order(client, customer, product, address):
     login(client, customer.email)
     client.post("/cart/add", data={"product_id": product.id, "quantity": 1})
     client.post("/checkout/place", data={"address_id": address.id, "payment_method": "cod"})
-    return Order.query.filter_by(user_id=customer.id).first()
+    return Order.first(Order.user_id == customer.id)
 
 
-def test_admin_can_collect_cod_payment(client, admin_user, customer, product, address, db):
+def test_admin_can_collect_cod_payment(client, admin_user, customer, product, address):
     order = _place_cod_order(client, customer, product, address)
     assert order.payment_status == PaymentStatus.PENDING
 
@@ -19,11 +19,11 @@ def test_admin_can_collect_cod_payment(client, admin_user, customer, product, ad
     resp = client.post(f"/admin/orders/{order.id}/collect-payment", follow_redirects=True)
     assert resp.status_code == 200
 
-    db.session.refresh(order)
+    order = reload(order)
     assert order.payment_status == PaymentStatus.PAID
 
 
-def test_collect_payment_button_hidden_once_paid(client, admin_user, customer, product, address, db):
+def test_collect_payment_button_hidden_once_paid(client, admin_user, customer, product, address):
     order = _place_cod_order(client, customer, product, address)
     client.get("/logout")
     admin_login(client, admin_user.email)
@@ -33,7 +33,7 @@ def test_collect_payment_button_hidden_once_paid(client, admin_user, customer, p
     assert b"Mark payment as collected" not in resp.data
 
 
-def test_collect_payment_rejected_for_razorpay_orders(app, admin_user, customer, product, address, db):
+def test_collect_payment_rejected_for_razorpay_orders(app, admin_user, customer, product, address):
     from app.cart.services import CartService
     from app.checkout.services import CheckoutService
 
@@ -46,22 +46,22 @@ def test_collect_payment_rejected_for_razorpay_orders(app, admin_user, customer,
         assert "Cash on Delivery" in str(exc)
 
 
-def test_collect_payment_rejected_for_cancelled_order(client, admin_user, customer, product, address, db):
+def test_collect_payment_rejected_for_cancelled_order(client, admin_user, customer, product, address):
     order = _place_cod_order(client, customer, product, address)
     client.get("/logout")
     admin_login(client, admin_user.email)
     client.post(f"/admin/orders/{order.id}/status", data={"new_status": "cancelled", "note": "test"})
 
-    db.session.refresh(order)
+    order = reload(order)
     assert order.order_status == OrderStatus.CANCELLED
 
     resp = client.post(f"/admin/orders/{order.id}/collect-payment", follow_redirects=True)
     assert resp.status_code == 200
-    db.session.refresh(order)
+    order = reload(order)
     assert order.payment_status != PaymentStatus.PAID
 
 
-def test_collect_payment_survives_full_delivery_flow(client, admin_user, customer, product, address, db):
+def test_collect_payment_survives_full_delivery_flow(client, admin_user, customer, product, address):
     order = _place_cod_order(client, customer, product, address)
     client.get("/logout")
     admin_login(client, admin_user.email)
@@ -70,12 +70,12 @@ def test_collect_payment_survives_full_delivery_flow(client, admin_user, custome
         resp = client.post(f"/admin/orders/{order.id}/status", data={"new_status": status, "note": ""}, follow_redirects=True)
         assert resp.status_code == 200
 
-    db.session.refresh(order)
+    order = reload(order)
     assert order.order_status == OrderStatus.DELIVERED
     assert order.payment_status == PaymentStatus.PENDING
 
     resp = client.post(f"/admin/orders/{order.id}/collect-payment", follow_redirects=True)
     assert resp.status_code == 200
-    db.session.refresh(order)
+    order = reload(order)
     assert order.payment_status == PaymentStatus.PAID
     assert order.order_status == OrderStatus.DELIVERED  # unchanged

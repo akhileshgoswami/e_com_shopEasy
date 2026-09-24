@@ -1,3 +1,4 @@
+from app.models.base import BaseModel
 from app.models.user import User, Role
 from app.models.address import Address
 from app.models.category import Category, Subcategory
@@ -9,6 +10,7 @@ from app.models.coupon import Coupon, DiscountType
 from app.models.site_content import SiteContent
 
 __all__ = [
+    "BaseModel",
     "User",
     "Role",
     "Address",

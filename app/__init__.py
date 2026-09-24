@@ -4,7 +4,7 @@ import sys
 from flask import Flask, jsonify, render_template, request
 
 from app.config import get_config
-from app.extensions import csrf, db, limiter, login_manager, mail, migrate, oauth
+from app.extensions import csrf, limiter, login_manager, mail, ndb, oauth
 from app.storage import init_storage
 
 
@@ -16,8 +16,12 @@ def create_app(config_name=None):
 
     _configure_logging(app)
 
-    db.init_app(app)
-    migrate.init_app(app, db)
+    if app.config.get("TRUST_PROXY_HEADERS"):
+        from werkzeug.middleware.proxy_fix import ProxyFix
+
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
+    ndb.init_app(app)
     login_manager.init_app(app)
     csrf.init_app(app)
     limiter.init_app(app)
@@ -71,7 +75,7 @@ def _register_login_manager(app):
 
     @login_manager.user_loader
     def load_user(user_id):
-        return db.session.get(User, int(user_id))
+        return User.find(user_id)
 
     @login_manager.unauthorized_handler
     def unauthorized():
@@ -114,7 +118,6 @@ def _register_error_handlers(app):
 
     @app.errorhandler(500)
     def internal_error(error):
-        db.session.rollback()
         app.logger.exception("Unhandled server error: %s", error)
         return render_template("errors/500.html"), 500
 
@@ -187,8 +190,10 @@ def _register_security_headers(app):
 def _register_health_check(app):
     @app.route("/health")
     def health():
+        from app.models import SiteContent
+
         try:
-            db.session.execute(db.text("SELECT 1"))
+            SiteContent.query().fetch(1, keys_only=True)
             db_ok = True
         except Exception:
             app.logger.exception("Health check database ping failed")
@@ -225,18 +230,22 @@ def _register_seo_routes(app):
         base_url = app.config["BASE_URL"].rstrip("/")
         urls = [base_url + url_for("shop.home")]
 
-        for category in Category.query.filter_by(is_active=True).all():
+        categories = Category.all(Category.is_active == True)  # noqa: E712
+        slugs_by_id = {c.id: c.slug for c in categories}
+        for category in categories:
             urls.append(base_url + url_for("shop.category_detail", category_slug=category.slug))
-        for subcategory in Subcategory.query.filter_by(is_active=True).all():
+        for subcategory in Subcategory.all(Subcategory.is_active == True):  # noqa: E712
+            if subcategory.category_id not in slugs_by_id:
+                continue
             urls.append(
                 base_url
                 + url_for(
                     "shop.subcategory_detail",
-                    category_slug=subcategory.category.slug,
+                    category_slug=slugs_by_id[subcategory.category_id],
                     subcategory_slug=subcategory.slug,
                 )
             )
-        for product in Product.query.filter_by(is_active=True).all():
+        for product in Product.all(Product.is_active == True):  # noqa: E712
             urls.append(base_url + url_for("shop.product_detail", slug=product.slug))
 
         xml_items = "".join(f"<url><loc>{u}</loc></url>" for u in urls)
@@ -260,12 +269,25 @@ def _register_template_filters(app):
 
 
 def _register_cli(app):
+    import functools
+
     import click
+
+    def with_ndb(command):
+        """CLI commands run outside any request, so open an NDB context."""
+
+        @functools.wraps(command)
+        def wrapped(*args, **kwargs):
+            with ndb.context():
+                return command(*args, **kwargs)
+
+        return wrapped
 
     @app.cli.command("seed-admin")
     @click.option("--email", required=True, help="Admin email address.")
     @click.option("--name", default="Administrator", help="Admin display name.")
     @click.option("--password", default=None, help="Admin password. If omitted, reads SEED_ADMIN_PASSWORD or prompts.")
+    @with_ndb
     def seed_admin(email, name, password):
         """Create (or promote) an admin user. Never hardcodes a production password."""
         import os
@@ -281,26 +303,25 @@ def _register_cli(app):
             sys.exit(1)
 
         email = email.strip().lower()
-        user = User.query.filter_by(email=email).first()
+        user = User.by_email(email)
         if user:
             user.role = Role.ADMIN
             user.is_active = True
             user.set_password(password)
-            db.session.commit()
+            user.put()
             click.echo(f"Existing user '{email}' promoted to admin and password updated.")
         else:
             user = User(name=name, email=email, role=Role.ADMIN, is_active=True)
             user.set_password(password)
-            db.session.add(user)
-            db.session.flush()
+            user.put()
 
             from app.models import Cart
 
-            db.session.add(Cart(user_id=user.id))
-            db.session.commit()
+            Cart(id=user.id, user_id=user.id).put()
             click.echo(f"Admin user '{email}' created.")
 
     @app.cli.command("seed-data")
+    @with_ndb
     def seed_data():
         """Populate development seed data: categories, subcategories, products.
         Refuses to run when FLASK_ENV=production."""

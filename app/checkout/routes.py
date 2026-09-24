@@ -4,7 +4,6 @@ from flask_login import current_user, login_required
 from app.auth.forms import AddressForm
 from app.checkout import checkout_bp
 from app.checkout.services import CheckoutError, CheckoutService
-from app.extensions import db
 from app.models import Address, OrderStatus, PaymentMethod
 from app.services.order_service import OrderService, OrderTransitionError
 
@@ -14,11 +13,11 @@ COUPON_SESSION_KEY = "checkout_coupon_code"
 @checkout_bp.route("/checkout", methods=["GET"])
 @login_required
 def checkout():
-    addresses = Address.query.filter_by(user_id=current_user.id).order_by(Address.is_default.desc(), Address.id.desc()).all()
+    addresses = Address.for_user(current_user.id)
     coupon_code = session.get(COUPON_SESSION_KEY)
     summary = CheckoutService.build_summary(current_user, coupon_code=coupon_code)
 
-    if not summary["cart"].items:
+    if not summary["items"]:
         flash("Your cart is empty.", "info")
         return redirect(url_for("cart.view_cart"))
 
@@ -59,11 +58,10 @@ def add_checkout_address():
     form = AddressForm()
     if form.validate_on_submit():
         if form.is_default.data:
-            Address.query.filter_by(user_id=current_user.id, is_default=True).update({"is_default": False})
+            Address.clear_default(current_user.id)
         address = Address(user_id=current_user.id)
         form.populate_obj(address)
-        db.session.add(address)
-        db.session.commit()
+        address.put()
         flash("Address added.", "success")
     else:
         for errors in form.errors.values():
@@ -79,7 +77,7 @@ def place_order():
     payment_method = request.form.get("payment_method")
     coupon_code = session.get(COUPON_SESSION_KEY)
 
-    address = Address.query.filter_by(id=address_id, user_id=current_user.id).first() if address_id else None
+    address = Address.owned_by(address_id, current_user.id)
     if address is None:
         flash("Please select a shipping address.", "danger")
         return redirect(url_for("checkout.checkout"))

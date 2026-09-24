@@ -4,14 +4,13 @@ New arrivals).
 Each section is either "auto" (products picked by the built-in rule, same as
 the storefront always did) or "manual" (admin picks the products and their
 order). Sections can be hidden and reordered. The whole layout is stored as a
-single JSON row in ``site_content`` so no migration is needed.
+single JSON row in ``site_content``.
 """
 
 import json
 
-from sqlalchemy import func
+from collections import defaultdict
 
-from app.extensions import db
 from app.models import Order, OrderItem, OrderStatus, Product, SiteContent
 
 STORAGE_KEY = "home_sections"
@@ -51,25 +50,32 @@ def _default_section(key):
     }
 
 
-def _on_sale_filter(query):
-    return query.filter(Product.sale_price.isnot(None), Product.sale_price > 0, Product.sale_price < Product.price)
+def _active_products():
+    return Product.all(Product.is_active == True)  # noqa: E712
 
 
 def order_stats(product_ids=None):
-    """{product_id: {"units": total quantity sold, "orders": distinct orders}}."""
-    query = (
-        db.session.query(
-            OrderItem.product_id,
-            func.sum(OrderItem.quantity).label("units"),
-            func.count(func.distinct(OrderItem.order_id)).label("orders"),
-        )
-        .join(Order, Order.id == OrderItem.order_id)
-        .filter(OrderItem.product_id.isnot(None), Order.order_status.notin_(NON_SALE_STATUSES))
-        .group_by(OrderItem.product_id)
-    )
-    if product_ids is not None:
-        query = query.filter(OrderItem.product_id.in_(product_ids))
-    return {row.product_id: {"units": int(row.units or 0), "orders": int(row.orders or 0)} for row in query.all()}
+    """{product_id: {"units": total quantity sold, "orders": distinct orders}}.
+
+    Datastore has no joins/GROUP BY, so this aggregates in Python over
+    every order line — fine at shop scale; move to a precomputed counter
+    if order volume grows large."""
+    sold_order_ids = {
+        key.id() for key in Order.query().fetch(keys_only=True)
+    } - {
+        key.id() for key in Order.query(Order.order_status.IN(NON_SALE_STATUSES)).fetch(keys_only=True)
+    }
+    units = defaultdict(int)
+    orders = defaultdict(set)
+    wanted = set(product_ids) if product_ids is not None else None
+    for item in OrderItem.query().fetch():
+        if item.product_id is None or item.order_id not in sold_order_ids:
+            continue
+        if wanted is not None and item.product_id not in wanted:
+            continue
+        units[item.product_id] += item.quantity or 0
+        orders[item.product_id].add(item.order_id)
+    return {pid: {"units": units[pid], "orders": len(orders[pid])} for pid in units}
 
 
 class HomeSectionsService:
@@ -77,7 +83,7 @@ class HomeSectionsService:
     def get_layout():
         """Saved layout merged with defaults: unknown keys dropped, missing
         sections appended, values clamped."""
-        row = SiteContent.query.filter_by(key=STORAGE_KEY).first()
+        row = SiteContent.get_by_id(STORAGE_KEY)
         saved = []
         if row and row.value:
             try:
@@ -122,45 +128,34 @@ class HomeSectionsService:
     def save_layout(sections):
         layout = HomeSectionsService._normalize(sections)
         value = json.dumps(layout)
-        row = SiteContent.query.filter_by(key=STORAGE_KEY).first()
-        if row is None:
-            db.session.add(SiteContent(key=STORAGE_KEY, label="Homepage sections", value=value))
-        else:
-            row.value = value
-        db.session.commit()
+        row = SiteContent.get_by_id(STORAGE_KEY) or SiteContent(id=STORAGE_KEY, label="Homepage sections")
+        row.value = value
+        row.put()
         return layout
 
     @staticmethod
     def auto_products(key, limit):
-        base = Product.query.filter_by(is_active=True)
         if key in ("featured", "new_arrivals"):
-            return base.order_by(Product.created_at.desc()).limit(limit).all()
+            return sorted(_active_products(), key=lambda p: p.created_at, reverse=True)[:limit]
         if key == "sale":
-            return _on_sale_filter(base).order_by(Product.updated_at.desc()).limit(limit).all()
+            on_sale = [p for p in _active_products() if p.is_on_sale]
+            return sorted(on_sale, key=lambda p: p.updated_at, reverse=True)[:limit]
         if key == "trending":
-            units = func.sum(OrderItem.quantity).label("units")
-            rows = (
-                db.session.query(Product, units)
-                .join(OrderItem, OrderItem.product_id == Product.id)
-                .join(Order, Order.id == OrderItem.order_id)
-                .filter(Product.is_active.is_(True), Order.order_status.notin_(NON_SALE_STATUSES))
-                .group_by(Product.id)
-                .order_by(units.desc(), Product.id)
-                .limit(limit)
-                .all()
-            )
-            return [product for product, _units in rows]
+            stats = order_stats()
+            if not stats:
+                return []
+            products = [p for p in Product.find_many(stats).values() if p.is_active]
+            return sorted(products, key=lambda p: (-stats[p.id]["units"], p.id))[:limit]
         return []
 
     @staticmethod
     def manual_products(key, product_ids):
         if not product_ids:
             return []
-        query = Product.query.filter(Product.id.in_(product_ids), Product.is_active.is_(True))
+        by_id = {pid: p for pid, p in Product.find_many(product_ids).items() if p.is_active}
         if key == "sale":
             # Never advertise a product "on sale" that no longer has a discount.
-            query = _on_sale_filter(query)
-        by_id = {p.id: p for p in query.all()}
+            by_id = {pid: p for pid, p in by_id.items() if p.is_on_sale}
         return [by_id[pid] for pid in product_ids if pid in by_id]
 
     @staticmethod

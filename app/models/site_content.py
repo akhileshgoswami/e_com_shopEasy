@@ -1,24 +1,25 @@
-from datetime import datetime, timezone
+from google.cloud import ndb
 
-from app.extensions import db
+from app.models.base import BaseModel
 
 
-class SiteContent(db.Model):
+class SiteContent(BaseModel):
     """Admin-editable site copy (About, Privacy Policy, Terms, contact info)
-    so these pages can be updated without a code deploy."""
+    so these pages can be updated without a code deploy. The entity id is
+    the content key (e.g. "about_body"), so each key exists at most once."""
 
-    __tablename__ = "site_content"
+    label = ndb.TextProperty(required=True)
+    value = ndb.TextProperty(default="")
 
-    id = db.Column(db.Integer, primary_key=True)
-    key = db.Column(db.String(80), nullable=False, unique=True, index=True)
-    label = db.Column(db.String(200), nullable=False)
-    value = db.Column(db.Text, nullable=False, default="")
-    updated_at = db.Column(
-        db.DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
-        nullable=False,
-    )
+    @property
+    def content_key(self):
+        return self.key.id() if self.key else None
+
+    @classmethod
+    def get_many(cls, content_keys):
+        """{content_key: row} for the keys that have been saved."""
+        rows = ndb.get_multi([ndb.Key(cls, k) for k in content_keys])
+        return {row.content_key: row for row in rows if row is not None}
 
     def __repr__(self):
-        return f"<SiteContent {self.key}>"
+        return f"<SiteContent {self.content_key}>"
