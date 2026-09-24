@@ -1,0 +1,238 @@
+{% extends "admin/base.html" %}
+{% block title %}Homepage sections - Admin{% endblock %}
+{% block admin_content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+  <h1 class="h3 mb-0">Homepage sections</h1>
+  <a href="{{ url_for('shop.home') }}" target="_blank" class="btn btn-sm btn-outline-secondary"><i class="bi bi-box-arrow-up-right"></i> Preview homepage</a>
+</div>
+<p class="text-muted mb-4">Choose which product sections show on the homepage, their order, and which products appear. <strong>Auto</strong> keeps the built-in rule; <strong>Manual</strong> lets you pick products and their order. Empty sections are hidden automatically.</p>
+
+<div class="row g-4">
+  <div class="col-xl-8">
+    <form method="post" id="sectionsForm">
+      {{ form.hidden_tag() }}
+      <div id="sectionsRoot"></div>
+      <div class="d-flex gap-2 mt-3">
+        <button type="submit" class="btn btn-primary">Save homepage</button>
+        <button type="button" class="btn btn-link" id="resetDefaults">Reset to defaults</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="col-xl-4">
+    <div class="card">
+      <div class="card-header bg-white fw-semibold"><i class="bi bi-fire text-danger"></i> Most ordered products</div>
+      {% if top_sellers %}
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead><tr><th>Product</th><th class="text-end">Units</th><th class="text-end">Orders</th></tr></thead>
+          <tbody>
+            {% for item in top_sellers %}
+            <tr>
+              <td class="small">{{ loop.index }}. {{ item.name }}</td>
+              <td class="text-end fw-semibold">{{ item.units }}</td>
+              <td class="text-end text-muted">{{ item.orders }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="card-body text-muted small">No completed orders yet. The Trending section stays hidden until products start selling.</div>
+      {% endif %}
+      <div class="card-footer bg-white small text-muted">Counts exclude pending, cancelled, failed, returned and refunded orders.</div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  var state = {{ layout|tojson }};
+  var catalog = {{ catalog|tojson }};
+  var autoPreview = {{ auto_preview|tojson }};
+  var rules = {{ rules|tojson }};
+  var defaultTitles = { featured: "Featured products", trending: "Trending products", sale: "On sale", new_arrivals: "New arrivals" };
+  var MAX_MANUAL = 24;
+  var byId = {};
+  catalog.forEach(function (p) { byId[p.id] = p; });
+
+  var root = document.getElementById("sectionsRoot");
+
+  function el(tag, attrs, children) {
+    var node = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) {
+      if (k === "text") node.textContent = attrs[k];
+      else if (k === "class") node.className = attrs[k];
+      else node.setAttribute(k, attrs[k]);
+    });
+    (children || []).forEach(function (c) { if (c) node.appendChild(c); });
+    return node;
+  }
+
+  function soldLabel(p) {
+    return p.units ? p.units + " sold · " + p.orders + " orders" : "No orders yet";
+  }
+
+  function productRow(p, actions) {
+    var info = el("div", { class: "flex-grow-1 min-w-0" }, [
+      el("div", { class: "small fw-semibold text-truncate", text: p.name }),
+      el("div", { class: "small text-muted", text: "₹" + p.price.toFixed(2) + (p.on_sale ? " · -" + p.discount + "%" : "") + " · " + soldLabel(p) + (p.in_stock ? "" : " · Out of stock") })
+    ]);
+    return el("div", { class: "hs-product d-flex align-items-center gap-2" }, [
+      el("img", { src: p.image, alt: "", class: "hs-thumb" }), info
+    ].concat(actions || []));
+  }
+
+  function iconButton(icon, title, onClick, disabled) {
+    var b = el("button", { type: "button", class: "btn btn-sm btn-outline-secondary hs-icon-btn", title: title, "aria-label": title }, [el("i", { class: "bi " + icon })]);
+    if (disabled) b.disabled = true;
+    b.addEventListener("click", onClick);
+    return b;
+  }
+
+  function move(list, index, delta) {
+    var target = index + delta;
+    if (target < 0 || target >= list.length) return;
+    var item = list.splice(index, 1)[0];
+    list.splice(target, 0, item);
+    render();
+  }
+
+  function renderSection(section, index) {
+    var card = el("div", { class: "card mb-3 hs-card" + (section.enabled ? "" : " hs-disabled") });
+
+    // Header: order buttons, title, visibility switch
+    var titleInput = el("input", { type: "text", class: "form-control form-control-sm fw-semibold", maxlength: "80", value: section.title, "aria-label": "Section title" });
+    titleInput.addEventListener("input", function () { section.title = titleInput.value; });
+
+    var switchInput = el("input", { class: "form-check-input", type: "checkbox", role: "switch", id: "hs-enabled-" + section.key });
+    switchInput.checked = section.enabled;
+    switchInput.addEventListener("change", function () { section.enabled = switchInput.checked; render(); });
+
+    card.appendChild(el("div", { class: "card-header bg-white d-flex align-items-center gap-2" }, [
+      el("div", { class: "d-flex flex-column gap-1" }, [
+        iconButton("bi-chevron-up", "Move up", function () { move(state, index, -1); }, index === 0),
+        iconButton("bi-chevron-down", "Move down", function () { move(state, index, 1); }, index === state.length - 1)
+      ]),
+      el("span", { class: "badge text-bg-light border", text: "#" + (index + 1) }),
+      titleInput,
+      el("div", { class: "form-check form-switch mb-0 ms-2 text-nowrap" }, [
+        switchInput,
+        el("label", { class: "form-check-label small", for: switchInput.id, text: section.enabled ? "Visible" : "Hidden" })
+      ])
+    ]));
+
+    var body = el("div", { class: "card-body" });
+
+    // Mode picker
+    var modes = el("div", { class: "btn-group btn-group-sm mb-3", role: "group" });
+    [["auto", "Auto"], ["manual", "Manual"]].forEach(function (m) {
+      var id = "hs-mode-" + section.key + "-" + m[0];
+      var radio = el("input", { type: "radio", class: "btn-check", name: "hs-mode-" + section.key, id: id });
+      radio.checked = section.mode === m[0];
+      radio.addEventListener("change", function () {
+        section.mode = m[0];
+        // Seed manual mode with what Auto currently shows, so admin starts from something.
+        if (m[0] === "manual" && !section.product_ids.length) {
+          section.product_ids = (autoPreview[section.key] || []).slice();
+        }
+        render();
+      });
+      modes.appendChild(radio);
+      modes.appendChild(el("label", { class: "btn btn-outline-secondary", for: id, text: m[1] }));
+    });
+    body.appendChild(modes);
+
+    if (section.mode === "auto") {
+      var limitInput = el("input", { type: "number", min: "1", max: "24", class: "form-control form-control-sm", style: "width: 90px;", value: section.limit });
+      limitInput.addEventListener("input", function () { section.limit = parseInt(limitInput.value, 10) || 8; });
+      body.appendChild(el("div", { class: "d-flex flex-wrap align-items-center gap-2 mb-3" }, [
+        el("span", { class: "small text-muted", text: "Rule: " + rules[section.key] + ". Show up to" }),
+        limitInput,
+        el("span", { class: "small text-muted", text: "products." })
+      ]));
+      var ids = autoPreview[section.key] || [];
+      body.appendChild(el("div", { class: "small fw-semibold mb-2", text: "Currently showing (" + ids.length + ")" }));
+      if (!ids.length) {
+        body.appendChild(el("div", { class: "small text-muted", text: section.key === "trending" ? "No orders yet — section is hidden on the homepage." : "No matching products — section is hidden on the homepage." }));
+      }
+      var grid = el("div", { class: "hs-list" });
+      ids.forEach(function (id) { if (byId[id]) grid.appendChild(productRow(byId[id])); });
+      body.appendChild(grid);
+    } else {
+      var list = el("div", { class: "hs-list mb-3" });
+      section.product_ids = section.product_ids.filter(function (id) { return byId[id]; });
+      if (!section.product_ids.length) {
+        list.appendChild(el("div", { class: "small text-muted", text: "No products picked yet — section is hidden until you add some." }));
+      }
+      section.product_ids.forEach(function (id, i) {
+        var p = byId[id];
+        var warn = section.key === "sale" && !p.on_sale
+          ? el("span", { class: "badge text-bg-warning", text: "No sale price — hidden" }) : null;
+        list.appendChild(productRow(p, [
+          warn,
+          iconButton("bi-arrow-up", "Move up", function () { move(section.product_ids, i, -1); }, i === 0),
+          iconButton("bi-arrow-down", "Move down", function () { move(section.product_ids, i, 1); }, i === section.product_ids.length - 1),
+          iconButton("bi-x-lg", "Remove", function () { section.product_ids.splice(i, 1); render(); })
+        ]));
+      });
+      body.appendChild(list);
+
+      // Add product search
+      var search = el("input", { type: "search", class: "form-control form-control-sm", placeholder: "Search products by name or SKU to add…" });
+      var results = el("div", { class: "hs-results" });
+      var full = section.product_ids.length >= MAX_MANUAL;
+      if (full) search.disabled = true;
+      function showResults() {
+        results.innerHTML = "";
+        var q = search.value.trim().toLowerCase();
+        if (!q) return;
+        var matches = catalog.filter(function (p) {
+          return section.product_ids.indexOf(p.id) === -1 &&
+            (section.key !== "sale" || p.on_sale) &&
+            (p.name.toLowerCase().indexOf(q) !== -1 || p.sku.toLowerCase().indexOf(q) !== -1);
+        }).slice(0, 8);
+        if (!matches.length) {
+          results.appendChild(el("div", { class: "small text-muted p-2", text: section.key === "sale" ? "No matching products with a sale price." : "No matching products." }));
+        }
+        matches.forEach(function (p) {
+          var add = el("button", { type: "button", class: "btn btn-sm btn-primary", text: "Add" });
+          add.addEventListener("click", function () { section.product_ids.push(p.id); render(); });
+          results.appendChild(productRow(p, [add]));
+        });
+      }
+      search.addEventListener("input", showResults);
+      body.appendChild(search);
+      body.appendChild(results);
+      var help = full ? "Maximum " + MAX_MANUAL + " products per section." :
+        (section.key === "sale" ? "Only products with a sale price can be added. Set sale price from Products → Edit." : "Tip: sold counts help you pick best sellers.");
+      body.appendChild(el("div", { class: "form-text", text: help }));
+    }
+
+    card.appendChild(body);
+    return card;
+  }
+
+  function render() {
+    root.innerHTML = "";
+    state.forEach(function (section, index) { root.appendChild(renderSection(section, index)); });
+  }
+
+  document.getElementById("resetDefaults").addEventListener("click", function () {
+    if (!confirm("Reset all homepage sections to the default layout? (Not saved until you click Save.)")) return;
+    state = Object.keys(defaultTitles).map(function (key) {
+      return { key: key, title: defaultTitles[key], enabled: true, mode: "auto", limit: 8, product_ids: [] };
+    });
+    render();
+  });
+
+  document.getElementById("sectionsForm").addEventListener("submit", function () {
+    document.getElementById("{{ form.sections_json.id }}").value = JSON.stringify(state);
+  });
+
+  render();
+})();
+</script>
+{% endblock %}

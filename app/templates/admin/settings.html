@@ -2,7 +2,140 @@
 {% block title %}Settings - Admin{% endblock %}
 {% block admin_content %}
 <h1 class="h3 mb-4">Settings</h1>
-<div class="card">
+
+<div class="card mb-4" style="max-width: 760px;">
+  <div class="card-header bg-white fw-semibold"><i class="bi bi-palette"></i> Branding</div>
+  <div class="card-body">
+    <form method="post" enctype="multipart/form-data">
+      {{ form.hidden_tag() }}
+
+      <div class="mb-4">
+        <label for="{{ form.logo.id }}" class="form-label fw-semibold">Logo</label>
+        <div class="d-flex align-items-center gap-3 mb-2">
+          <div class="logo-preview">
+            {% if logo_url %}<img src="{{ logo_url }}" alt="Current logo">{% else %}<i class="bi bi-image text-muted fs-3"></i>{% endif %}
+          </div>
+          <div class="flex-grow-1">
+            {{ form.logo(class="form-control", accept="image/jpeg,image/png,image/webp") }}
+            <div class="form-text">PNG with transparent background works best. Shown in header, footer, admin and as the browser tab icon.</div>
+          </div>
+        </div>
+        {% if logo_url %}
+        <div class="form-check">
+          {{ form.remove_logo(class="form-check-input") }}
+          <label class="form-check-label" for="{{ form.remove_logo.id }}">Remove current logo</label>
+        </div>
+        {% endif %}
+        <div class="form-check">
+          {{ form.show_name_with_logo(class="form-check-input") }}
+          <label class="form-check-label" for="{{ form.show_name_with_logo.id }}">Show website name next to logo</label>
+          <div class="form-text mt-0">Turn off if your logo already contains the name.</div>
+        </div>
+      </div>
+
+      <div class="mb-4">
+        <label for="{{ form.site_name.id }}" class="form-label fw-semibold">Website name</label>
+        {{ form.site_name(class="form-control" ~ (" is-invalid" if form.site_name.errors else ""), maxlength=60) }}
+        {% for error in form.site_name.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+        <div class="form-text">Shown in the header, footer, page titles and payment screen.</div>
+      </div>
+
+      <div class="mb-3">
+        <label for="{{ form.theme_color.id }}" class="form-label fw-semibold">Theme color</label>
+        <div class="d-flex align-items-center gap-2 mb-3">
+          <input type="color" id="themeColorPicker" class="form-control form-control-color" value="{{ form.theme_color.data or '#b8873f' }}" title="Pick a color">
+          {{ form.theme_color(class="form-control" ~ (" is-invalid" if form.theme_color.errors else ""), style="max-width: 140px;", maxlength=7) }}
+        </div>
+        {% for error in form.theme_color.errors %}<div class="invalid-feedback d-block mb-2">{{ error }}</div>{% endfor %}
+        <div class="d-flex flex-wrap gap-2">
+          {% for label, color in presets %}
+          <button type="button" class="theme-swatch" data-color="{{ color }}" style="background: {{ color }};" title="{{ label }}" aria-label="{{ label }}"></button>
+          {% endfor %}
+        </div>
+        <div class="form-text">Used for buttons, links, highlights and badges across the store.</div>
+      </div>
+
+      <div class="row g-3 mb-3">
+        <div class="col-md-6">
+          <label for="{{ form.heading_font.id }}" class="form-label fw-semibold">Heading font</label>
+          {{ form.heading_font(class="form-select") }}
+        </div>
+        <div class="col-md-6">
+          <label for="{{ form.body_font.id }}" class="form-label fw-semibold">Body font</label>
+          {{ form.body_font(class="form-select") }}
+        </div>
+        <div class="col-12"><div class="form-text mt-0">Headings use the heading font; menus, text and buttons use the body font.</div></div>
+      </div>
+
+      <div class="theme-preview mb-4" id="themePreview">
+        <span class="eyebrow d-block mb-2">Preview</span>
+        <p class="theme-preview-heading mb-1" id="fontPreviewHeading">Everyday essentials, elevated.</p>
+        <p class="theme-preview-body small text-muted mb-3" id="fontPreviewBody">Thoughtfully sourced pieces — secure checkout, effortless delivery.</p>
+        <div class="d-flex flex-wrap align-items-center gap-2">
+          <span class="btn btn-sm theme-preview-btn">Add to cart</span>
+          <span class="theme-preview-badge">Sale</span>
+          <span class="theme-preview-link">View all <i class="bi bi-arrow-right"></i></span>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary">Save branding</button>
+    </form>
+  </div>
+</div>
+
+<div class="card mb-4" style="max-width: 760px;">
+  <div class="card-header bg-white fw-semibold"><i class="bi bi-image"></i> Homepage banner</div>
+  <div class="card-body">
+    <div class="hero-banner mb-4 banner-admin-preview{{ ' has-image' if banner.hero_image_url }}"{% if banner.hero_image_url %} style="background-image: url('{{ banner.hero_image_url }}');"{% endif %}>
+      <div class="row"><div class="col-10">
+        <p class="eyebrow mb-1" style="color: var(--gold);">{{ banner.hero_eyebrow }}</p>
+        <p class="h5 text-white mb-1">{{ banner.hero_title }}</p>
+        <p class="small mb-0" style="color: #d9d2c2;">{{ banner.hero_subtitle }}</p>
+      </div></div>
+    </div>
+
+    <form method="post" action="{{ url_for('admin.settings_banner') }}" enctype="multipart/form-data">
+      {{ banner_form.hidden_tag() }}
+
+      <div class="mb-3">
+        <label for="{{ banner_form.image.id }}" class="form-label fw-semibold">Background image</label>
+        {{ banner_form.image(class="form-control", accept="image/jpeg,image/png,image/webp") }}
+        <div class="form-text">Wide landscape image works best (e.g. 1600&times;600). JPG, PNG or WebP. The text side is darkened automatically for readability.</div>
+        {% if banner.hero_image_url %}
+        <div class="form-check mt-2">
+          {{ banner_form.remove_image(class="form-check-input") }}
+          <label class="form-check-label" for="{{ banner_form.remove_image.id }}">Remove current image (use default dark background)</label>
+        </div>
+        {% endif %}
+      </div>
+
+      <div class="row g-3 mb-3">
+        <div class="col-md-6">
+          <label for="{{ banner_form.eyebrow.id }}" class="form-label fw-semibold">Small heading</label>
+          {{ banner_form.eyebrow(class="form-control", maxlength=60) }}
+        </div>
+        <div class="col-md-6">
+          <label for="{{ banner_form.button_text.id }}" class="form-label fw-semibold">Button text</label>
+          {{ banner_form.button_text(class="form-control", maxlength=40) }}
+        </div>
+      </div>
+      <div class="mb-3">
+        <label for="{{ banner_form.title.id }}" class="form-label fw-semibold">Title</label>
+        {{ banner_form.title(class="form-control", maxlength=120) }}
+      </div>
+      <div class="mb-3">
+        <label for="{{ banner_form.subtitle.id }}" class="form-label fw-semibold">Subtitle</label>
+        {{ banner_form.subtitle(class="form-control", rows=2, maxlength=300) }}
+        <div class="form-text">Leave any text field empty to use the default wording.</div>
+      </div>
+
+      <button type="submit" class="btn btn-primary">Save banner</button>
+    </form>
+  </div>
+</div>
+
+<div class="card" style="max-width: 760px;">
+  <div class="card-header bg-white fw-semibold"><i class="bi bi-gear"></i> Environment</div>
   <div class="list-group list-group-flush">
     {% for key, value in overview.items() %}
     <div class="list-group-item d-flex justify-content-between">
@@ -12,5 +145,64 @@
     {% endfor %}
   </div>
 </div>
-<p class="text-muted small mt-3">These settings are configured via environment variables / Secret Manager and are read-only here. Update them in your deployment configuration and redeploy to change them.</p>
+<p class="text-muted small mt-3">Environment settings are configured via environment variables / Secret Manager and are read-only here. Update them in your deployment configuration and redeploy to change them.</p>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  var picker = document.getElementById("themeColorPicker");
+  var text = document.getElementById("{{ form.theme_color.id }}");
+  var preview = document.getElementById("themePreview");
+  var hexPattern = /^#[0-9a-fA-F]{6}$/;
+
+  function apply(color) {
+    if (!hexPattern.test(color)) return;
+    preview.style.setProperty("--preview-color", color);
+    document.querySelectorAll(".theme-swatch").forEach(function (el) {
+      el.classList.toggle("active", el.dataset.color.toLowerCase() === color.toLowerCase());
+    });
+  }
+
+  picker.addEventListener("input", function () { text.value = picker.value; apply(picker.value); });
+  text.addEventListener("input", function () {
+    if (hexPattern.test(text.value)) picker.value = text.value;
+    apply(text.value);
+  });
+  document.querySelectorAll(".theme-swatch").forEach(function (el) {
+    el.addEventListener("click", function () {
+      picker.value = el.dataset.color;
+      text.value = el.dataset.color;
+      apply(el.dataset.color);
+    });
+  });
+  apply(text.value);
+
+  // Font preview: load each font's stylesheet on first use only.
+  var fontPreviews = {{ font_previews|tojson }};
+  var loadedFonts = {};
+  function previewFont(select, target) {
+    var font = fontPreviews[select.value];
+    if (!font) return;
+    if (!loadedFonts[font.url]) {
+      var link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = font.url;
+      document.head.appendChild(link);
+      loadedFonts[font.url] = true;
+    }
+    target.style.fontFamily = font.stack;
+  }
+  var headingSelect = document.getElementById("{{ form.heading_font.id }}");
+  var bodySelect = document.getElementById("{{ form.body_font.id }}");
+  var headingTarget = document.getElementById("fontPreviewHeading");
+  var bodyTargets = [document.getElementById("fontPreviewBody"), preview.querySelector(".theme-preview-btn")];
+  headingSelect.addEventListener("change", function () { previewFont(headingSelect, headingTarget); });
+  bodySelect.addEventListener("change", function () {
+    bodyTargets.forEach(function (el) { previewFont(bodySelect, el); });
+  });
+  previewFont(headingSelect, headingTarget);
+  bodyTargets.forEach(function (el) { previewFont(bodySelect, el); });
+})();
+</script>
 {% endblock %}

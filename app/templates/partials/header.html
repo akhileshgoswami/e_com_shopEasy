@@ -1,3 +1,4 @@
+{% import "partials/brand.html" as b with context %}
 <div class="trust-strip d-none d-md-block">
   <div class="container">
     <span><i class="bi bi-truck"></i> Free delivery over ₹999</span>
@@ -9,13 +10,13 @@
 <header class="site-header sticky-top bg-white border-bottom">
   <div class="container">
     <nav class="navbar navbar-expand-lg py-2">
-      <a class="navbar-brand fw-bold fs-4 text-primary" href="{{ url_for('shop.home') }}">
-        <i class="bi bi-bag-heart-fill"></i> {{ site_name }}
-      </a>
-
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav" aria-controls="mainNav" aria-expanded="false" aria-label="Toggle navigation">
-        <span class="navbar-toggler-icon"></span>
+      <button class="navbar-toggler nav-menu-btn me-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#mainNav" aria-controls="mainNav" aria-label="Open menu">
+        <i class="bi bi-list"></i>
       </button>
+
+      <a class="navbar-brand fw-bold fs-4 text-primary d-flex align-items-center gap-2 me-auto me-lg-0" href="{{ url_for('shop.home') }}">
+        {{ b.brand() }}
+      </a>
 
       <form class="d-none d-lg-flex flex-grow-1 mx-4" role="search" action="{{ url_for('shop.search') }}" method="get">
         <div class="input-group">
@@ -24,11 +25,14 @@
         </div>
       </form>
 
-      <div class="d-flex align-items-center order-lg-3 gap-3">
+      <div class="d-flex align-items-center order-lg-3 gap-1 gap-md-3">
+        <button class="header-icon-btn d-lg-none" type="button" data-bs-toggle="collapse" data-bs-target="#mobileSearch" aria-controls="mobileSearch" aria-expanded="false" aria-label="Search">
+          <i class="bi bi-search"></i>
+        </button>
         {% if current_user.is_authenticated %}
         <div class="dropdown">
-          <a class="text-dark text-decoration-none dropdown-toggle d-flex align-items-center gap-1" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-            <i class="bi bi-person-circle fs-5"></i> <span class="d-none d-md-inline">{{ current_user.name.split(' ')[0] }}</span>
+          <a class="header-icon-btn text-dark text-decoration-none dropdown-toggle d-flex align-items-center gap-1" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Account">
+            <i class="bi bi-person-circle"></i> <span class="d-none d-md-inline fs-6">{{ current_user.name.split(' ')[0] }}</span>
           </a>
           <ul class="dropdown-menu dropdown-menu-end">
             <li><a class="dropdown-item" href="{{ url_for('auth.profile') }}"><i class="bi bi-person"></i> My profile</a></li>
@@ -42,34 +46,79 @@
           </ul>
         </div>
         {% else %}
-        <a href="{{ url_for('auth.login') }}" class="text-dark text-decoration-none d-flex align-items-center gap-1">
-          <i class="bi bi-person-circle fs-5"></i> <span class="d-none d-md-inline">Login</span>
+        <a href="{{ url_for('auth.login') }}" class="header-icon-btn text-dark text-decoration-none d-flex align-items-center gap-1" aria-label="Login">
+          <i class="bi bi-person-circle"></i> <span class="d-none d-md-inline fs-6">Login</span>
         </a>
         {% endif %}
 
-        <a href="{{ url_for('cart.view_cart') }}" class="text-dark text-decoration-none position-relative d-none d-md-block">
-          <i class="bi bi-cart3 fs-5"></i>
+        <a href="{{ url_for('cart.view_cart') }}" class="header-icon-btn text-dark text-decoration-none position-relative d-none d-md-inline-flex" aria-label="Cart">
+          <i class="bi bi-cart3"></i>
           <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-primary cart-badge-count {{ 'd-none' if not cart_item_count }}">{{ cart_item_count }}</span>
         </a>
       </div>
 
-      <div class="collapse navbar-collapse mt-3 mt-lg-0" id="mainNav">
-        <form class="d-flex d-lg-none mb-3" role="search" action="{{ url_for('shop.search') }}" method="get">
+      {# Mobile: search row that drops down under the header #}
+      <div class="collapse w-100 d-lg-none" id="mobileSearch">
+        <form class="pt-2 pb-1" role="search" action="{{ url_for('shop.search') }}" method="get">
           <div class="input-group">
-            <input type="search" name="q" class="form-control" placeholder="Search products..." value="{{ request.args.get('q', '') }}">
+            <input type="search" name="q" class="form-control" placeholder="Search products..." value="{{ request.args.get('q', '') }}" aria-label="Search products">
             <button class="btn btn-primary" type="submit"><i class="bi bi-search"></i></button>
           </div>
         </form>
-        <ul class="navbar-nav category-nav flex-row flex-wrap gap-2 gap-lg-4">
-          {% for category in nav_categories %}
-          <li class="nav-item">
-            <a class="nav-link px-0" href="{{ url_for('shop.category_detail', category_slug=category.slug) }}">{{ category.name }}</a>
-          </li>
-          {% endfor %}
-          <li class="nav-item">
-            <a class="nav-link px-0" href="{{ url_for('shop.product_list') }}">All products</a>
-          </li>
-        </ul>
+      </div>
+
+      {# Below lg this is a slide-in drawer; on desktop Bootstrap renders it inline as the category row #}
+      <div class="offcanvas offcanvas-start nav-drawer" tabindex="-1" id="mainNav" aria-labelledby="mainNavLabel">
+        <div class="offcanvas-header">
+          <span class="offcanvas-title navbar-brand fs-5 d-flex align-items-center gap-2" id="mainNavLabel">{{ b.brand() }}</span>
+          <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close menu"></button>
+        </div>
+        <div class="offcanvas-body flex-column flex-lg-row">
+          <form class="d-lg-none mb-3" role="search" action="{{ url_for('shop.search') }}" method="get">
+            <div class="input-group">
+              <input type="search" name="q" class="form-control" placeholder="Search products..." value="{{ request.args.get('q', '') }}" aria-label="Search products">
+              <button class="btn btn-primary" type="submit"><i class="bi bi-search"></i></button>
+            </div>
+          </form>
+
+          <p class="nav-drawer-heading d-lg-none">Shop by category</p>
+          <ul class="navbar-nav category-nav flex-row flex-wrap gap-2 gap-lg-4">
+            {% for category in nav_categories %}
+            <li class="nav-item">
+              <a class="nav-link px-0" href="{{ url_for('shop.category_detail', category_slug=category.slug) }}">{{ category.name }}<i class="bi bi-chevron-right d-lg-none"></i></a>
+            </li>
+            {% endfor %}
+            <li class="nav-item">
+              <a class="nav-link px-0" href="{{ url_for('shop.product_list') }}">All products<i class="bi bi-chevron-right d-lg-none"></i></a>
+            </li>
+          </ul>
+
+          <div class="d-lg-none mt-4">
+            <p class="nav-drawer-heading">My account</p>
+            <ul class="list-unstyled nav-drawer-links mb-0">
+              {% if current_user.is_authenticated %}
+              <li><a href="{{ url_for('auth.profile') }}"><i class="bi bi-person"></i> My profile</a></li>
+              <li><a href="{{ url_for('checkout.my_orders') }}"><i class="bi bi-box-seam"></i> My orders</a></li>
+              <li><a href="{{ url_for('auth.addresses') }}"><i class="bi bi-geo-alt"></i> My addresses</a></li>
+              <li><a href="{{ url_for('cart.view_cart') }}"><i class="bi bi-cart3"></i> Cart{% if cart_item_count %} <span class="badge rounded-pill bg-primary cart-badge-count">{{ cart_item_count }}</span>{% endif %}</a></li>
+              {% if current_user.is_admin %}
+              <li><a href="{{ url_for('admin.dashboard') }}"><i class="bi bi-speedometer2"></i> Admin panel</a></li>
+              {% endif %}
+              <li><a href="{{ url_for('auth.logout') }}"><i class="bi bi-box-arrow-right"></i> Logout</a></li>
+              {% else %}
+              <li><a href="{{ url_for('auth.login') }}"><i class="bi bi-box-arrow-in-right"></i> Login</a></li>
+              <li><a href="{{ url_for('auth.register') }}"><i class="bi bi-person-plus"></i> Create account</a></li>
+              <li><a href="{{ url_for('cart.view_cart') }}"><i class="bi bi-cart3"></i> Cart</a></li>
+              {% endif %}
+            </ul>
+          </div>
+
+          <div class="nav-drawer-trust d-lg-none mt-4">
+            <span><i class="bi bi-truck"></i> Free delivery over ₹999</span>
+            <span><i class="bi bi-arrow-repeat"></i> 7-day easy returns</span>
+            <span><i class="bi bi-shield-check"></i> Secure payments</span>
+          </div>
+        </div>
       </div>
     </nav>
   </div>

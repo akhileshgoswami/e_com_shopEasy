@@ -9,6 +9,7 @@
   <li class="nav-item"><a class="nav-link {{ 'active' if p.startswith('/admin/payments') }}" href="{{ url_for('admin.payments') }}"><i class="bi bi-credit-card"></i> Payments</a></li>
   <li class="nav-item"><a class="nav-link {{ 'active' if p.startswith('/admin/users') }}" href="{{ url_for('admin.users') }}"><i class="bi bi-people"></i> Users</a></li>
   <li class="nav-item"><a class="nav-link {{ 'active' if p.startswith('/admin/coupons') }}" href="{{ url_for('admin.coupons') }}"><i class="bi bi-ticket-perforated"></i> Coupons</a></li>
+  <li class="nav-item"><a class="nav-link {{ 'active' if p.startswith('/admin/homepage') }}" href="{{ url_for('admin.homepage_sections') }}"><i class="bi bi-layout-text-window-reverse"></i> Homepage</a></li>
   <li class="nav-item"><a class="nav-link {{ 'active' if p.startswith('/admin/content') }}" href="{{ url_for('admin.content_list') }}"><i class="bi bi-file-earmark-text"></i> Content</a></li>
   <li class="nav-item"><a class="nav-link {{ 'active' if p.startswith('/admin/settings') }}" href="{{ url_for('admin.settings') }}"><i class="bi bi-gear"></i> Settings</a></li>
 </ul>

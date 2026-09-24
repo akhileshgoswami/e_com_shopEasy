@@ -127,13 +127,21 @@ def _register_context_processors(app):
         from flask_login import current_user
 
         from app.cart.services import CartService
-        from app.services.site_content_service import SiteContentService
+        from app.services.site_content_service import (
+            BRANDING_DEFAULTS,
+            BrandingService,
+            SiteContentService,
+            build_font_theme,
+            build_theme_palette,
+        )
         from app.shop.services import CategoryService
 
         cart_item_count = 0
         nav_categories = []
         footer_contact = {}
+        branding = dict(BRANDING_DEFAULTS)
         try:
+            branding = BrandingService.get()
             if current_user.is_authenticated:
                 cart_item_count = CartService.get_item_count(current_user)
             nav_categories = CategoryService.list_active_categories()
@@ -144,7 +152,11 @@ def _register_context_processors(app):
         return {
             "nav_categories": nav_categories,
             "cart_item_count": cart_item_count,
-            "site_name": "ShopEasy",
+            "site_name": branding["site_name"],
+            "site_logo_url": branding["logo_url"],
+            "show_site_name": not branding["logo_url"] or branding["show_name_with_logo"] == "1",
+            "theme": build_theme_palette(branding["theme_color"]),
+            "fonts": build_font_theme(branding["heading_font"], branding["body_font"]),
             "now_year": datetime.now(timezone.utc).year,
             "google_oauth_enabled": app.config.get("GOOGLE_OAUTH_ENABLED", False),
             "footer_contact": footer_contact,

@@ -2,12 +2,12 @@
 <html>
 <body style="font-family: Arial, sans-serif; background: #f8f9fb; padding: 24px; color: #212529;">
   <div style="max-width: 560px; margin: 0 auto; background: #fff; border-radius: 8px; overflow: hidden;">
-    <div style="background: #2f5233; color: #fff; padding: 20px; font-size: 20px; font-weight: bold;">ShopEasy</div>
+    <div style="background: #2f5233; color: #fff; padding: 20px; font-size: 20px; font-weight: bold;">{{ site_name|default("ShopEasy") }}</div>
     <div style="padding: 24px;">
       {% block email_body %}{% endblock %}
     </div>
     <div style="padding: 16px 24px; color: #868e96; font-size: 12px; border-top: 1px solid #eee;">
-      This is an automated message from ShopEasy. Please do not reply to this email.
+      This is an automated message from {{ site_name|default("ShopEasy") }}. Please do not reply to this email.
     </div>
   </div>
 </body>

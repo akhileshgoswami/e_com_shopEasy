@@ -121,24 +121,6 @@ class ProductService:
         return query.paginate(page=page, per_page=per_page, error_out=False)
 
     @classmethod
-    def featured_products(cls, limit=8):
-        return cls.base_query().order_by(Product.created_at.desc()).limit(limit).all()
-
-    @classmethod
-    def new_products(cls, limit=8):
-        return cls.base_query().order_by(Product.created_at.desc()).limit(limit).all()
-
-    @classmethod
-    def sale_products(cls, limit=8):
-        return (
-            cls.base_query()
-            .filter(Product.sale_price.isnot(None), Product.sale_price > 0, Product.sale_price < Product.price)
-            .order_by(Product.updated_at.desc())
-            .limit(limit)
-            .all()
-        )
-
-    @classmethod
     def related_products(cls, product, limit=4):
         query = cls.base_query().filter(Product.id != product.id)
         if product.subcategory_id:

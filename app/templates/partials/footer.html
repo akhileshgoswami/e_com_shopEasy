@@ -1,8 +1,9 @@
+{% import "partials/brand.html" as b with context %}
 <footer class="pt-5 pb-4 mt-5" style="background: var(--ink); color: #e9e0d1;">
   <div class="container">
     <div class="row gy-4">
       <div class="col-6 col-lg-3">
-        <h5 class="fw-bold text-white" style="font-family: var(--font-display);"><i class="bi bi-gem" style="color: var(--gold);"></i> {{ site_name }}</h5>
+        <h5 class="fw-bold text-white d-flex align-items-center gap-2 footer-brand" style="font-family: var(--font-display);">{{ b.brand(icon="bi-gem", on_dark=True) }}</h5>
         <p class="small" style="color: #b9b2a6;">Your one-stop shop for electronics, fashion and home essentials, delivered fast and securely.</p>
         {% if footer_contact %}
         <ul class="list-unstyled small mt-3" style="color: #b9b2a6;">

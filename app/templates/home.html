@@ -4,68 +4,62 @@
 {% block content %}
 <div class="container py-4">
 
-  <div class="hero-banner mb-5">
+  <div class="hero-banner mb-5{{ ' has-image' if hero.hero_image_url }}"{% if hero.hero_image_url %} style="background-image: url('{{ hero.hero_image_url }}');"{% endif %}>
     <div class="row align-items-center">
       <div class="col-lg-7">
-        <p class="eyebrow mb-2" style="color: var(--gold);">Curated for you</p>
-        <h1 class="display-6">Everyday essentials, elevated.</h1>
-        <p class="lead mb-4">Thoughtfully sourced electronics, fashion and home pieces — secure checkout, effortless delivery.</p>
-        <a href="{{ url_for('shop.product_list') }}" class="btn btn-light btn-lg">Shop the collection <i class="bi bi-arrow-right"></i></a>
+        <p class="eyebrow mb-2" style="color: var(--gold);">{{ hero.hero_eyebrow }}</p>
+        <h1 class="display-6">{{ hero.hero_title }}</h1>
+        <p class="lead mb-4">{{ hero.hero_subtitle }}</p>
+        <a href="{{ url_for('shop.product_list') }}" class="btn btn-light btn-lg">{{ hero.hero_button_text }} <i class="bi bi-arrow-right"></i></a>
       </div>
     </div>
   </div>
 
   {% if categories %}
   <section class="mb-5">
-    <h2 class="h4 mb-3">Featured categories</h2>
-    <div class="row row-cols-3 row-cols-md-4 row-cols-lg-8 g-3">
-      {% for category in categories %}
-      <div class="col">
-        <a class="category-tile" href="{{ url_for('shop.category_detail', category_slug=category.slug) }}">
-          <img src="{{ category.image_url or url_for('static', filename='images/placeholder.svg') }}" alt="{{ category.name }}">
-          <div class="small fw-semibold">{{ category.name }}</div>
-        </a>
+    <div class="d-flex justify-content-between align-items-end mb-3">
+      <div>
+        <p class="eyebrow mb-1">Browse</p>
+        <h2 class="h4 mb-0">Featured categories</h2>
       </div>
+      <a href="{{ url_for('shop.product_list') }}" class="small">Shop all</a>
+    </div>
+    <div class="category-grid">
+      {% for category in categories %}
+      <a class="category-card{{ ' no-image' if not category.image_url }}" href="{{ url_for('shop.category_detail', category_slug=category.slug) }}">
+        {% if category.image_url %}
+        <img src="{{ category.image_url }}" alt="{{ category.name }}" loading="lazy">
+        {% else %}
+        <span class="category-card-initial" aria-hidden="true">{{ category.name[:1] }}</span>
+        {% endif %}
+        <span class="category-card-body">
+          <span class="category-card-name">{{ category.name }}</span>
+          <span class="category-card-cta">Explore <i class="bi bi-arrow-right"></i></span>
+        </span>
+      </a>
       {% endfor %}
     </div>
   </section>
   {% endif %}
 
-  {% if featured %}
-  <section class="mb-5">
+  {% set section_links = {
+    "featured": url_for('shop.product_list'),
+    "trending": url_for('shop.product_list'),
+    "sale": url_for('shop.product_list', on_sale=1),
+    "new_arrivals": url_for('shop.product_list', sort='newest'),
+  } %}
+  {% set section_icons = {"trending": "bi-fire", "sale": "bi-tag-fill text-danger"} %}
+  {% for section in sections %}
+  <section class="mb-5 home-section-{{ section.key }}">
     <div class="d-flex justify-content-between align-items-center mb-3">
-      <h2 class="h4 mb-0">Featured products</h2>
-      <a href="{{ url_for('shop.product_list') }}" class="small">View all</a>
+      <h2 class="h4 mb-0">{% if section_icons[section.key] %}<i class="bi {{ section_icons[section.key] }}"></i> {% endif %}{{ section.title }}</h2>
+      <a href="{{ section_links[section.key] }}" class="small">View all</a>
     </div>
     <div class="row g-3">
-      {% for product in featured %}{{ pc.product_card(product) }}{% endfor %}
+      {% for product in section.products %}{{ pc.product_card(product) }}{% endfor %}
     </div>
   </section>
-  {% endif %}
-
-  {% if sale_items %}
-  <section class="mb-5">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-      <h2 class="h4 mb-0"><i class="bi bi-tag-fill text-danger"></i> On sale</h2>
-      <a href="{{ url_for('shop.product_list', on_sale=1) }}" class="small">View all</a>
-    </div>
-    <div class="row g-3">
-      {% for product in sale_items %}{{ pc.product_card(product) }}{% endfor %}
-    </div>
-  </section>
-  {% endif %}
-
-  {% if new_arrivals %}
-  <section class="mb-5">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-      <h2 class="h4 mb-0">New arrivals</h2>
-      <a href="{{ url_for('shop.product_list', sort='newest') }}" class="small">View all</a>
-    </div>
-    <div class="row g-3">
-      {% for product in new_arrivals %}{{ pc.product_card(product) }}{% endfor %}
-    </div>
-  </section>
-  {% endif %}
+  {% endfor %}
 
 </div>
 {% endblock %}

@@ -1,0 +1,10 @@
+{# Site logo (if uploaded) and/or name. on_dark wraps the logo in a light
+   chip so dark logos stay visible on dark backgrounds. #}
+{% macro brand(icon="bi-bag-heart-fill", on_dark=False) %}
+{%- if site_logo_url -%}
+<span class="brand-logo-wrap{{ ' on-dark' if on_dark }}"><img src="{{ site_logo_url }}" alt="{{ site_name }}" class="brand-logo"></span>
+{%- else -%}
+<i class="bi {{ icon }}"></i>
+{%- endif -%}
+{%- if show_site_name %} <span class="brand-name">{{ site_name }}</span>{% endif -%}
+{% endmacro %}

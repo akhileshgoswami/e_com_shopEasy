@@ -2,7 +2,8 @@ from flask import render_template, request
 from flask_login import current_user
 
 from app.models import Cart
-from app.services.site_content_service import SiteContentService
+from app.services.home_sections_service import HomeSectionsService
+from app.services.site_content_service import HeroBannerService, SiteContentService
 from app.shop import shop_bp
 from app.shop.services import CategoryService, ProductService
 
@@ -10,15 +11,11 @@ from app.shop.services import CategoryService, ProductService
 @shop_bp.route("/")
 def home():
     categories = CategoryService.list_active_categories()[:8]
-    featured = ProductService.featured_products(limit=8)
-    new_arrivals = ProductService.new_products(limit=8)
-    sale_items = ProductService.sale_products(limit=8)
     return render_template(
         "home.html",
+        hero=HeroBannerService.get(),
         categories=categories,
-        featured=featured,
-        new_arrivals=new_arrivals,
-        sale_items=sale_items,
+        sections=HomeSectionsService.homepage_sections(),
     )
 
 

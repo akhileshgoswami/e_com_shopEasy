@@ -1,0 +1,19 @@
+{# Admin-selected theme color and fonts, layered over the defaults in style.css.
+   Font stacks come only from the FONT_CHOICES whitelist, so |safe is fine. #}
+{% if fonts %}
+{% for url in fonts.urls %}<link href="{{ url }}" rel="stylesheet">
+{% endfor %}
+{% endif %}
+{% if theme %}
+<style>
+  :root {
+    --gold: {{ theme.accent }};
+    --gold-dark: {{ theme.accent_dark }};
+    --gold-soft: {{ theme.accent_soft }};
+    --gold-rgb: {{ theme.accent_rgb }};
+    {% if fonts %}--font-display: {{ fonts.heading|safe }};
+    --font-body: {{ fonts.body|safe }};{% endif %}
+  }
+</style>
+<meta name="theme-color" content="{{ theme.accent }}">
+{% endif %}

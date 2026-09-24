@@ -6,6 +6,9 @@ from flask_login import current_user, login_required, login_user, logout_user
 from app.admin import admin_bp
 from app.admin.forms import (
     AdminLoginForm,
+    BrandingForm,
+    HeroBannerForm,
+    HomeSectionsForm,
     CategoryForm,
     CouponForm,
     OrderStatusForm,
@@ -497,10 +500,44 @@ def coupon_edit(coupon_id):
 
 # ---------- Settings ----------
 
-@admin_bp.route("/settings")
+@admin_bp.route("/settings", methods=["GET", "POST"])
 @admin_required
 def settings():
     from flask import current_app
+
+    from app.services.site_content_service import (
+        FONT_CHOICES,
+        THEME_PRESETS,
+        BrandingService,
+        HeroBannerService,
+        font_stack,
+        font_stylesheet_urls,
+    )
+
+    form = BrandingForm()
+    if request.method == "GET":
+        branding = BrandingService.get()
+        form.site_name.data = branding["site_name"]
+        form.theme_color.data = branding["theme_color"]
+        form.show_name_with_logo.data = branding["show_name_with_logo"] == "1"
+        form.heading_font.data = branding["heading_font"]
+        form.body_font.data = branding["body_font"]
+
+    if form.validate_on_submit():
+        try:
+            BrandingService.update(
+                form.site_name.data,
+                form.theme_color.data,
+                logo=form.logo.data or None,
+                remove_logo=form.remove_logo.data,
+                show_name_with_logo=form.show_name_with_logo.data,
+                heading_font=form.heading_font.data,
+                body_font=form.body_font.data,
+            )
+            flash("Branding updated.", "success")
+            return redirect(url_for("admin.settings"))
+        except UnsupportedFileError as exc:
+            flash(str(exc), "danger")
 
     overview = {
         "Environment": current_app.config.get("FLASK_ENV", "development"),
@@ -512,7 +549,106 @@ def settings():
         "Default shipping charge": current_app.config.get("DEFAULT_SHIPPING_CHARGE"),
         "Tax rate (%)": current_app.config.get("TAX_RATE_PERCENT"),
     }
-    return render_template("admin/settings.html", overview=overview)
+    banner = HeroBannerService.get()
+    banner_form = HeroBannerForm(prefix="banner")
+    banner_form.eyebrow.data = banner["hero_eyebrow"]
+    banner_form.title.data = banner["hero_title"]
+    banner_form.subtitle.data = banner["hero_subtitle"]
+    banner_form.button_text.data = banner["hero_button_text"]
+
+    return render_template(
+        "admin/settings.html",
+        overview=overview,
+        form=form,
+        presets=THEME_PRESETS,
+        banner_form=banner_form,
+        banner=banner,
+        logo_url=BrandingService.get()["logo_url"],
+        font_previews={
+            key: {"stack": font_stack(key), "url": font_stylesheet_urls(key, (700,))[0]} for key in FONT_CHOICES
+        },
+    )
+
+
+@admin_bp.route("/settings/banner", methods=["POST"])
+@admin_required
+def settings_banner():
+    from app.services.site_content_service import HeroBannerService
+
+    form = HeroBannerForm(prefix="banner")
+    if not form.validate_on_submit():
+        for errors in form.errors.values():
+            for error in errors:
+                flash(error, "danger")
+        return redirect(url_for("admin.settings"))
+
+    try:
+        HeroBannerService.update(
+            eyebrow=form.eyebrow.data or "",
+            title=form.title.data or "",
+            subtitle=form.subtitle.data or "",
+            button_text=form.button_text.data or "",
+            image=form.image.data or None,
+            remove_image=form.remove_image.data,
+        )
+        flash("Homepage banner updated.", "success")
+    except UnsupportedFileError as exc:
+        flash(str(exc), "danger")
+    return redirect(url_for("admin.settings"))
+
+
+# ---------- Homepage sections (Featured / Trending / On sale / New arrivals) ----------
+
+@admin_bp.route("/homepage", methods=["GET", "POST"])
+@admin_required
+def homepage_sections():
+    import json
+
+    from app.services.home_sections_service import SECTION_DEFAULTS, HomeSectionsService, order_stats
+
+    form = HomeSectionsForm()
+    if form.validate_on_submit():
+        try:
+            sections = json.loads(form.sections_json.data)
+        except ValueError:
+            flash("Could not read the section settings. Please try again.", "danger")
+        else:
+            HomeSectionsService.save_layout(sections if isinstance(sections, list) else [])
+            flash("Homepage sections updated.", "success")
+            return redirect(url_for("admin.homepage_sections"))
+
+    layout = HomeSectionsService.get_layout()
+    stats = order_stats()
+    products = Product.query.filter_by(is_active=True).order_by(Product.name).all()
+    catalog = [
+        {
+            "id": p.id,
+            "name": p.name,
+            "sku": p.sku,
+            "price": float(p.effective_price),
+            "on_sale": p.is_on_sale,
+            "discount": p.discount_percent,
+            "in_stock": p.in_stock,
+            "image": p.image_url or url_for("static", filename="images/placeholder.svg"),
+            "units": stats.get(p.id, {}).get("units", 0),
+            "orders": stats.get(p.id, {}).get("orders", 0),
+        }
+        for p in products
+    ]
+    auto_preview = {
+        s["key"]: [p.id for p in HomeSectionsService.auto_products(s["key"], s["limit"])] for s in layout
+    }
+    top_sellers = sorted((c for c in catalog if c["units"]), key=lambda c: (-c["units"], c["name"]))[:10]
+
+    return render_template(
+        "admin/homepage_sections.html",
+        form=form,
+        layout=layout,
+        catalog=catalog,
+        auto_preview=auto_preview,
+        rules={s["key"]: s["rule"] for s in SECTION_DEFAULTS},
+        top_sellers=top_sellers,
+    )
 
 
 # ---------- Site content (About / Privacy Policy / Terms / contact info) ----------

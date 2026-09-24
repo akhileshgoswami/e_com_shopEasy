@@ -3,13 +3,14 @@ from flask_wtf.file import FileAllowed, FileField
 from wtforms import (
     BooleanField,
     DecimalField,
+    HiddenField,
     IntegerField,
     PasswordField,
     SelectField,
     StringField,
     TextAreaField,
 )
-from wtforms.validators import DataRequired, Email, InputRequired, Length, NumberRange, Optional
+from wtforms.validators import DataRequired, Email, InputRequired, Length, NumberRange, Optional, Regexp
 
 
 class AdminLoginForm(FlaskForm):
@@ -80,3 +81,41 @@ class CouponForm(FlaskForm):
 
 class SiteContentForm(FlaskForm):
     value = TextAreaField("Content", validators=[DataRequired(), Length(max=20000)])
+
+
+class BrandingForm(FlaskForm):
+    site_name = StringField("Website name", validators=[DataRequired(), Length(max=60)])
+    theme_color = StringField(
+        "Theme color",
+        validators=[DataRequired(), Regexp(r"^#[0-9a-fA-F]{6}$", message="Use a hex color like #b8873f.")],
+    )
+    logo = FileField("Logo", validators=[Optional(), FileAllowed(["jpg", "jpeg", "png", "webp"], "Images only.")])
+    remove_logo = BooleanField("Remove current logo")
+    show_name_with_logo = BooleanField("Show website name next to logo", default=True)
+    # Choice validation is done by BrandingService against FONT_CHOICES, so an
+    # unknown or missing value just keeps the current font.
+    heading_font = SelectField("Heading font", validators=[Optional()], validate_choice=False)
+    body_font = SelectField("Body font", validators=[Optional()], validate_choice=False)
+
+    def __init__(self, *args, **kwargs):
+        from app.services.site_content_service import FONT_CHOICES
+
+        super().__init__(*args, **kwargs)
+        choices = [(key, label) for key, (label, *_rest) in FONT_CHOICES.items()]
+        self.heading_font.choices = choices
+        self.body_font.choices = choices
+
+
+class HeroBannerForm(FlaskForm):
+    eyebrow = StringField("Small heading", validators=[Optional(), Length(max=60)])
+    title = StringField("Title", validators=[Optional(), Length(max=120)])
+    subtitle = TextAreaField("Subtitle", validators=[Optional(), Length(max=300)])
+    button_text = StringField("Button text", validators=[Optional(), Length(max=40)])
+    image = FileField("Background image", validators=[Optional(), FileAllowed(["jpg", "jpeg", "png", "webp"], "Images only.")])
+    remove_image = BooleanField("Remove current image")
+
+
+class HomeSectionsForm(FlaskForm):
+    # Serialized by the admin page's JS; normalized server-side by
+    # HomeSectionsService, so malformed input can't break the homepage.
+    sections_json = HiddenField("Sections", validators=[DataRequired()])
