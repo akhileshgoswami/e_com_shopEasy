@@ -181,9 +181,11 @@ def logout():
 
 def _no_store(response):
     """Reset pages carry a secret in their URL: keep them out of caches and
-    out of the Referer header sent to third-party assets."""
+    out of the Referer header sent to third-party assets (CDN CSS/JS).
+    "same-origin", not "no-referrer": over HTTPS Flask-WTF's CSRF check
+    requires a same-site Referer on the form POST."""
     response.headers["Cache-Control"] = "no-store"
-    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Referrer-Policy"] = "same-origin"
     return response
 
 

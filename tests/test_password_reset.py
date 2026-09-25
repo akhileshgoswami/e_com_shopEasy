@@ -107,7 +107,7 @@ def test_successful_reset_changes_password_and_sends_confirmation(client, custom
     form_page = client.get(f"/reset-password/{token}")
     assert form_page.status_code == 200
     assert form_page.headers["Cache-Control"] == "no-store"
-    assert form_page.headers["Referrer-Policy"] == "no-referrer"
+    assert form_page.headers["Referrer-Policy"] == "same-origin"
 
     resp = submit_new_password(client, token)
     assert b"Your password has been reset" in resp.data
@@ -258,3 +258,38 @@ def test_forgot_password_is_rate_limited_per_ip(rate_limited_client):
     assert statuses[5] == 429
     # Viewing the page isn't limited.
     assert rate_limited_client.get("/forgot-password").status_code == 200
+
+
+def test_reset_form_submits_over_https_with_csrf(app, customer, mail_outbox):
+    """Regression: over HTTPS Flask-WTF requires a same-origin Referer, so the
+    reset page must not send Referrer-Policy: no-referrer."""
+    app.config["WTF_CSRF_ENABLED"] = True
+    client = app.test_client()
+    https = {"base_url": "https://shop.example.com"}
+
+    page = client.get("/forgot-password", **https)
+    csrf = re.search(r'name="csrf_token" type="hidden" value="([^"]+)"', page.get_data(as_text=True)).group(1)
+    client.post(
+        "/forgot-password",
+        data={"email": customer.email, "csrf_token": csrf},
+        headers={"Referer": "https://shop.example.com/forgot-password"},
+        **https,
+    )
+    token = token_from(mail_outbox[0])
+
+    page = client.get(f"/reset-password/{token}", **https)
+    # What the browser does with this policy on a same-site form POST:
+    assert page.headers["Referrer-Policy"] in ("same-origin", "strict-origin-when-cross-origin")
+    csrf = re.search(r'name="csrf_token" type="hidden" value="([^"]+)"', page.get_data(as_text=True)).group(1)
+    resp = client.post(
+        f"/reset-password/{token}",
+        data={"password": NEW_PASSWORD, "confirm_password": NEW_PASSWORD, "csrf_token": csrf},
+        headers={"Referer": f"https://shop.example.com/reset-password/{token}"},
+        **https,
+    )
+    assert resp.status_code == 302, resp.get_data(as_text=True)[:300]
+    assert reload(customer).check_password(NEW_PASSWORD)
+
+    # Without a Referer (what no-referrer caused) Flask-WTF rejects it.
+    missing = client.post("/forgot-password", data={"email": customer.email, "csrf_token": csrf}, **https)
+    assert missing.status_code == 400
