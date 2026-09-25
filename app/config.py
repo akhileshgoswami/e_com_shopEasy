@@ -74,6 +74,14 @@ class BaseConfig:
     # across every Cloud Run instance (the IP limiter is per-instance).
     PASSWORD_RESET_MAX_PER_HOUR = int(os.environ.get("PASSWORD_RESET_MAX_PER_HOUR", 3))
 
+    # New email/password sign-ups must enter a code emailed to them before
+    # they can log in. Existing accounts and Google sign-ins are unaffected.
+    EMAIL_VERIFICATION_REQUIRED = _bool(os.environ.get("EMAIL_VERIFICATION_REQUIRED"), True)
+    EMAIL_OTP_EXPIRY_MINUTES = int(os.environ.get("EMAIL_OTP_EXPIRY_MINUTES", 10))
+    EMAIL_OTP_MAX_ATTEMPTS = int(os.environ.get("EMAIL_OTP_MAX_ATTEMPTS", 5))
+    EMAIL_OTP_RESEND_SECONDS = int(os.environ.get("EMAIL_OTP_RESEND_SECONDS", 60))
+    EMAIL_OTP_MAX_PER_HOUR = int(os.environ.get("EMAIL_OTP_MAX_PER_HOUR", 5))
+
     RATELIMIT_STORAGE_URI = os.environ.get("RATELIMIT_STORAGE_URI", "memory://")
     RATELIMIT_HEADERS_ENABLED = True
 

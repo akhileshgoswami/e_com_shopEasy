@@ -26,6 +26,11 @@ class User(UserMixin, BaseModel):
     # id, so sessions and "remember me" cookies issued before the change
     # stop working everywhere at once.
     session_version = ndb.IntegerProperty(default=0, indexed=False)
+    # False only for email sign-ups that haven't entered their emailed code
+    # yet. Accounts created before verification existed have no value and
+    # count as verified.
+    email_verified = ndb.BooleanProperty()
+    email_verified_at = UTCDateTimeProperty(indexed=False)
     password_changed_at = UTCDateTimeProperty(indexed=False)
 
     @classmethod
@@ -55,6 +60,10 @@ class User(UserMixin, BaseModel):
 
     def check_password(self, raw_password):
         return check_password_hash(self.password_hash, raw_password)
+
+    @property
+    def is_email_verified(self):
+        return self.email_verified is not False
 
     @property
     def is_admin(self):

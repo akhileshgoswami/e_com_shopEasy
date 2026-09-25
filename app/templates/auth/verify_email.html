@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Verify your email - {{ site_name }}{% endblock %}
+{% block extra_head %}<meta name="robots" content="noindex">{% endblock %}
+{% block content %}
+<div class="container py-5" style="max-width: 440px;">
+  <div class="card card-body shadow-sm">
+    <div class="text-center">
+      <i class="bi bi-envelope-check display-5 text-primary"></i>
+      <h1 class="h4 mt-2 mb-2">Verify your email</h1>
+      <p class="text-muted small mb-4">We sent a 6-digit code to <strong class="text-body">{{ email }}</strong>. It expires in {{ expiry_minutes }} minutes.</p>
+    </div>
+
+    <form method="post" novalidate data-loading-form>
+      {{ form.hidden_tag() }}
+      <div class="mb-3">
+        <label for="{{ form.code.id }}" class="form-label">{{ form.code.label.text }}</label>
+        {{ form.code(class="form-control form-control-lg text-center font-monospace" ~ (" is-invalid" if form.code.errors else ""),
+                     inputmode="numeric", autocomplete="one-time-code", maxlength=7, pattern="[0-9 ]*",
+                     placeholder="••••••", autofocus=True, required=True, style="letter-spacing:.5em;font-size:1.6rem;") }}
+        {% for error in form.code.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+      </div>
+      <button type="submit" class="btn btn-primary w-100" data-loading-text="Verifying…">Verify and continue</button>
+    </form>
+
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3 small">
+      <form method="post" action="{{ url_for('auth.resend_verification') }}" class="m-0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-link btn-sm p-0" data-resend data-wait="{{ resend_wait }}" {{ 'disabled' if resend_wait }}>
+          Resend code<span data-resend-countdown>{% if resend_wait %} in {{ resend_wait }}s{% endif %}</span>
+        </button>
+      </form>
+      <form method="post" action="{{ url_for('auth.change_signup_email') }}" class="m-0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-link btn-sm p-0 text-muted">Wrong email?</button>
+      </form>
+    </div>
+    <p class="text-muted small mt-3 mb-0">Can't find it? Check your spam or promotions folder.</p>
+  </div>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+(function () {
+  const button = document.querySelector("[data-resend]");
+  if (!button) return;
+  const label = button.querySelector("[data-resend-countdown]");
+  let wait = Number(button.dataset.wait) || 0;
+  if (!wait) return;
+  const timer = setInterval(() => {
+    wait -= 1;
+    if (wait <= 0) {
+      clearInterval(timer);
+      button.disabled = false;
+      label.textContent = "";
+    } else {
+      label.textContent = ` in ${wait}s`;
+    }
+  }, 1000);
+})();
+</script>
+{% endblock %}

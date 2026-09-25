@@ -250,6 +250,7 @@ Cloud Run provisions and renews the TLS certificate automatically once your DNS 
 | Email | Template (`app/templates/emails/`) | Sent when |
 |---|---|---|
 | Reset your password | `forgot_password` | A registered, active account requests a reset (the page answers identically for unknown emails). |
+| Email verification code | `verify_email` | Email/password sign-up, or a login attempt (correct password) on an account that isn't verified yet. |
 | Password changed | `password_changed` | After a reset or a change from the profile page. |
 | Order confirmed | `order_confirmation` | COD: right after the order commits. Razorpay: only after the payment is verified server-side (checkout signature check or signed webhook) — never on the client's word, and never for failed/unverified payments. |
 | New order received (owner) | `owner_new_order` | Same moment as the confirmation, independently of it, to `OWNER_EMAIL`. Includes a link to the admin order page (admin login required). |
@@ -258,6 +259,17 @@ Cloud Run provisions and renews the TLS certificate automatically once your DNS 
 | Welcome | `registration` | Email sign-up. |
 
 Every email has an HTML part (shared `base_email.html` layout + `_components.html` macros, inline CSS, mobile-friendly, store name/logo/theme colour and support contacts from the admin settings) and a plain-text part (`.txt`).
+
+### Email verification on sign-up
+
+New email/password accounts start unverified and can't log in until the customer enters the 6-digit code emailed to them at `/verify-email`; then they're logged in, their pending add-to-cart/wishlist action is replayed and the welcome email goes out.
+
+- Code: random 6 digits, valid `EMAIL_OTP_EXPIRY_MINUTES` (10), stored only as an HMAC (keyed with `SECRET_KEY`) in the `EmailVerificationCode` kind (one row per user, replaced on resend, deleted on success).
+- Limits: `EMAIL_OTP_MAX_ATTEMPTS` (5) wrong codes kill the code; "Resend" waits `EMAIL_OTP_RESEND_SECONDS` (60) and allows `EMAIL_OTP_MAX_PER_HOUR` (5) sends per account; per-IP limits on verify/resend.
+- Logging in with the right password on an unverified account sends a fresh code and opens the verify page instead of logging in.
+- Signing up again with an email that was never verified replaces that pending sign-up (nobody proved they own it). A Google sign-in or a completed password reset on it marks the email verified — and a Google sign-in discards the pending account's password.
+- Accounts created before this feature, admins from `flask seed-admin`, and Google sign-ins count as verified. Admin → Users shows an "Email unverified" badge for pending ones.
+- Set `EMAIL_VERIFICATION_REQUIRED=false` to switch it off. Note: with `MAIL_ENABLED=false` no code can arrive, so either configure SMTP (or Mailpit) locally or switch verification off.
 
 ### Editing email wording (admin panel)
 

@@ -389,6 +389,36 @@ class EmailService:
             return False
 
     @classmethod
+    def send_verification_code(cls, user, code):
+        """Not in the outbox, for the same reason as reset links: the code
+        must never be stored in the clear. A user who didn't get it presses
+        "Resend"."""
+        try:
+            minutes = current_app.config["EMAIL_OTP_EXPIRY_MINUTES"]
+            copy = _copy(
+                "verify_email",
+                customer_name=user.name,
+                customer_email=user.email,
+                code_expiry_minutes=minutes,
+            )
+            return cls.deliver(
+                subject=copy["subject"],
+                recipients=[user.email],
+                template="verify_email",
+                context={
+                    "copy": copy,
+                    "user": user,
+                    "code": code,
+                    "expiry_minutes": minutes,
+                    "verify_url": cls.absolute_url("auth.verify_email"),
+                },
+                kind="verify_email",
+            )
+        except Exception:
+            logger.exception("Could not send verification email: user_id=%s", user.id)
+            return False
+
+    @classmethod
     def send_password_changed(cls, user):
         return cls._send_once(
             f"password_changed:{user.id}:{user.session_version or 0}", "password_changed", {"user_id": user.id}
@@ -435,7 +465,7 @@ class EmailService:
 
 def build_email_values(brand, customer_name=None, customer_email=None, order=None, old_status=None,
                        new_status=None, expiry_minutes=None, changed_at=None, payment_method_label=None,
-                       payment_status_label=None, status_label=None):
+                       payment_status_label=None, status_label=None, code_expiry_minutes=None):
     """Every {placeholder} an admin may use, as display strings."""
     from app.utils import to_ist
 
@@ -468,6 +498,8 @@ def build_email_values(brand, customer_name=None, customer_email=None, order=Non
         )
     if expiry_minutes is not None:
         values["expiry_minutes"] = str(expiry_minutes)
+    if code_expiry_minutes is not None:
+        values["code_expiry_minutes"] = str(code_expiry_minutes)
     if changed_at is not None:
         values["changed_at"] = to_ist(changed_at).strftime("%d %b %Y, %I:%M %p IST")
     return values

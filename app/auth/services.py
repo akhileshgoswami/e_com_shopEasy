@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import logging
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -5,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from flask import current_app
 from google.cloud import ndb
 
-from app.models import Cart, PasswordResetToken, Role, User
+from app.models import Cart, EmailVerificationCode, PasswordResetToken, Role, User
 from app.utils import as_aware_utc
 
 logger = logging.getLogger("app.auth")
@@ -37,6 +39,23 @@ class ResetTokenError(AuthError):
         super().__init__(self.MESSAGES[state])
 
 
+class EmailNotVerifiedError(AuthError):
+    """Correct password, but the sign-up code was never entered."""
+
+    def __init__(self, user):
+        self.user = user
+        super().__init__("Please verify your email address before logging in.")
+
+
+class VerificationError(AuthError):
+    """state: "invalid", "expired", "locked" (too many wrong codes) or
+    "throttled" (resend asked too soon / too often)."""
+
+    def __init__(self, state, message):
+        self.state = state
+        super().__init__(message)
+
+
 def _create_with_cart(user):
     """The cart's id is the user's id, so it can only be created once the
     user has one."""
@@ -47,14 +66,36 @@ def _create_with_cart(user):
 class AuthenticationService:
     @staticmethod
     def register_customer(name, email, password, phone=None):
+        """Create a customer. With EMAIL_VERIFICATION_REQUIRED the account
+        starts unverified and can't log in until the emailed code is
+        entered. Signing up again with an email that was never verified
+        replaces that pending sign-up — nobody has proven they own it, so
+        this stops someone parking an account on another person's email."""
         email = email.strip().lower()
-        if User.by_email(email):
-            raise AuthError("An account with this email already exists.")
+        require_code = current_app.config.get("EMAIL_VERIFICATION_REQUIRED", True)
+        existing = User.by_email(email)
+        if existing is not None:
+            if existing.is_email_verified or not existing.is_active:
+                raise AuthError("An account with this email already exists.")
+            existing.name = name.strip()
+            existing.phone = phone
+            existing.set_password(password)
+            existing.revoke_sessions()
+            existing.put()
+            logger.info("Pending sign-up replaced: user_id=%s", existing.id)
+            return existing
 
-        user = User(name=name.strip(), email=email, phone=phone, role=Role.CUSTOMER, is_active=True)
+        user = User(
+            name=name.strip(),
+            email=email,
+            phone=phone,
+            role=Role.CUSTOMER,
+            is_active=True,
+            email_verified=False if require_code else True,
+        )
         user.set_password(password)
         _create_with_cart(user)
-        logger.info("New customer registered: user_id=%s", user.id)
+        logger.info("New customer registered: user_id=%s verified=%s", user.id, user.email_verified)
         return user
 
     @staticmethod
@@ -75,9 +116,26 @@ class AuthenticationService:
         if user is not None:
             if not user.is_active:
                 raise AuthError("This account has been deactivated.")
+            if not user.is_email_verified:
+                # Google just proved who owns this email. Whoever set the
+                # pending account's password didn't, so that password goes.
+                user.set_password(secrets.token_urlsafe(32))
+                user.revoke_sessions()
+                user.email_verified = True
+                user.email_verified_at = datetime.now(timezone.utc)
+                user.put()
+                EmailVerificationCode.key_for(user.id).delete()
+                logger.info("Pending sign-up claimed via Google: user_id=%s", user.id)
             return user
 
-        user = User(name=name or email.split("@")[0], email=email, role=Role.CUSTOMER, is_active=True)
+        user = User(
+            name=name or email.split("@")[0],
+            email=email,
+            role=Role.CUSTOMER,
+            is_active=True,
+            email_verified=True,
+            email_verified_at=datetime.now(timezone.utc),
+        )
         user.set_password(secrets.token_urlsafe(32))
         _create_with_cart(user)
         logger.info("New customer registered via Google: user_id=%s", user.id)
@@ -116,6 +174,10 @@ class AuthenticationService:
 
         user.failed_login_attempts = 0
         user.locked_until = None
+        if not user.is_email_verified:
+            user.put()
+            logger.info("Login refused, email not verified: user_id=%s", user.id)
+            raise EmailNotVerifiedError(user)
         user.last_login_at = now
         user.put()
         logger.info("Login success: user_id=%s", user.id)
@@ -214,6 +276,10 @@ class AuthenticationService:
             user.locked_until = None
             user.password_changed_at = now
             user.revoke_sessions()
+            if not user.is_email_verified:
+                # Following the emailed link proves ownership of the address.
+                user.email_verified = True
+                user.email_verified_at = now
             record.used_at = now
             ndb.put_multi([record, user])
             return user
@@ -232,3 +298,111 @@ class AuthenticationService:
         user.revoke_sessions()
         user.put()
         logger.info("Password changed: user_id=%s", user.id)
+
+
+def _code_hash(user_id, code):
+    """Keyed so the stored hash can't be reversed by trying all 10^6 codes
+    without the app's SECRET_KEY; bound to the user so a hash can't be
+    replayed on another account."""
+    key = current_app.config["SECRET_KEY"].encode("utf-8")
+    return hmac.new(key, f"{user_id}:{code}".encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+class EmailVerificationService:
+    CODE_LENGTH = 6
+
+    @staticmethod
+    def _config(name):
+        return current_app.config[name]
+
+    @classmethod
+    def issue_code(cls, user, force=False):
+        """Create (or replace) the account's code and return it, or raise
+        VerificationError("throttled") when asked again too soon / too
+        often. force skips the cooldown (the first code after sign-up)."""
+        now = datetime.now(timezone.utc)
+        key = EmailVerificationCode.key_for(user.id)
+        code = f"{secrets.randbelow(10 ** cls.CODE_LENGTH):0{cls.CODE_LENGTH}d}"
+        cooldown = timedelta(seconds=cls._config("EMAIL_OTP_RESEND_SECONDS"))
+
+        def txn():
+            record = key.get()
+            recent = [t for t in (record.recent_sends if record else []) if as_aware_utc(t) > now - timedelta(hours=1)]
+            if record is not None and not force:
+                last = as_aware_utc(record.last_sent_at)
+                if last and now - last < cooldown:
+                    wait = int((cooldown - (now - last)).total_seconds()) + 1
+                    raise VerificationError("throttled", f"Please wait {wait} seconds before requesting another code.")
+            if len(recent) >= cls._config("EMAIL_OTP_MAX_PER_HOUR"):
+                raise VerificationError(
+                    "throttled", "Too many codes requested. Please try again in an hour or contact support."
+                )
+            record = EmailVerificationCode(
+                key=key,
+                code_hash=_code_hash(user.id, code),
+                expires_at=now + timedelta(minutes=cls._config("EMAIL_OTP_EXPIRY_MINUTES")),
+                failed_attempts=0,
+                last_sent_at=now,
+                recent_sends=recent + [now],
+            )
+            record.put()
+
+        ndb.transaction(txn)
+        logger.info("Verification code issued: user_id=%s", user.id)
+        return code
+
+    @classmethod
+    def seconds_until_resend(cls, user):
+        record = EmailVerificationCode.key_for(user.id).get()
+        if record is None or record.last_sent_at is None:
+            return 0
+        elapsed = (datetime.now(timezone.utc) - as_aware_utc(record.last_sent_at)).total_seconds()
+        return max(0, int(cls._config("EMAIL_OTP_RESEND_SECONDS") - elapsed))
+
+    @classmethod
+    def verify(cls, user_id, code):
+        """Check the code and mark the account verified. Wrong codes count
+        towards EMAIL_OTP_MAX_ATTEMPTS, after which the code is dead and a
+        new one must be requested. Returns the verified user."""
+        code = "".join(ch for ch in (code or "") if ch.isdigit())
+        key = EmailVerificationCode.key_for(user_id)
+        max_attempts = cls._config("EMAIL_OTP_MAX_ATTEMPTS")
+
+        def txn():
+            now = datetime.now(timezone.utc)
+            user = User.get_by_id(int(user_id))
+            if user is None or not user.is_active:
+                raise VerificationError("invalid", "This account can't be verified. Please sign up again.")
+            if user.is_email_verified:
+                return user, False
+            record = key.get()
+            if record is None:
+                raise VerificationError("expired", "This code has expired. Please request a new one.")
+            if (record.failed_attempts or 0) >= max_attempts:
+                raise VerificationError("locked", "Too many incorrect attempts. Please request a new code.")
+            if as_aware_utc(record.expires_at) <= now:
+                raise VerificationError("expired", "This code has expired. Please request a new one.")
+            if len(code) != cls.CODE_LENGTH or not hmac.compare_digest(record.code_hash, _code_hash(user.id, code)):
+                record.failed_attempts = (record.failed_attempts or 0) + 1
+                record.put()
+                left = max_attempts - record.failed_attempts
+                if left <= 0:
+                    return None, "locked"
+                return None, left
+            user.email_verified = True
+            user.email_verified_at = now
+            user.put()
+            key.delete()
+            return user, True
+
+        user, result = ndb.transaction(txn)
+        if user is None:
+            if result == "locked":
+                logger.warning("Verification code locked after repeated failures: user_id=%s", user_id)
+                raise VerificationError("locked", "Too many incorrect attempts. Please request a new code.")
+            raise VerificationError(
+                "invalid", f"That code isn't right. {result} attempt{'s' if result != 1 else ''} left."
+            )
+        if result is True:
+            logger.info("Email verified: user_id=%s", user.id)
+        return user

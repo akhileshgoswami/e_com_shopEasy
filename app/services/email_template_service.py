@@ -53,6 +53,7 @@ PLACEHOLDER_HELP = {
     "tracking_number": "Courier tracking number (if set)",
     "expiry_minutes": "Minutes until the reset link expires",
     "changed_at": "When the password was changed (IST)",
+    "code_expiry_minutes": "Minutes until the verification code expires",
 }
 
 _ACCOUNT = ("store_name", "support_email", "customer_name", "customer_email")
@@ -141,6 +142,24 @@ EMAIL_TEMPLATES = {
             "heading": "Payment received",
             "intro": "Hi {customer_name}, we've received your payment of {order_total} for order #{order_number}. Thank you!",
             "button_label": "View Order",
+            "note": "",
+        },
+    },
+    "verify_email": {
+        "name": "Email verification code",
+        "audience": "Customer",
+        "trigger": "Customer signs up with email and password, or logs in before verifying",
+        "placeholders": _ACCOUNT + ("code_expiry_minutes",),
+        "note_help": "The 6-digit code, its expiry and the \"didn't sign up?\" notice are always included.",
+        "defaults": {
+            "subject": "Verify your email | {store_name}",
+            "heading": "Confirm your email address",
+            "intro": (
+                "Hi {customer_name},\n\n"
+                "Thanks for signing up with {store_name}! Enter the code below to verify your email "
+                "and activate your account."
+            ),
+            "button_label": "Enter code",
             "note": "",
         },
     },
@@ -390,8 +409,10 @@ def _sample(template_key):
         "status_label": "Placed",
     }
 
-    if template_key in ("forgot_password", "password_changed", "registration"):
+    if template_key in ("forgot_password", "password_changed", "registration", "verify_email"):
         context = {
+            "code": "482913",
+            "verify_url": EmailService.base_url() + "/verify-email",
             "user": user,
             "reset_url": EmailService.base_url() + "/reset-password/SAMPLE-TOKEN",
             "expiry_minutes": 30,
@@ -400,7 +421,15 @@ def _sample(template_key):
             "shop_url": EmailService.base_url() + "/",
             "changed_at": now,
         }
-        values = {"customer_name": user.name, "customer_email": user.email, "expiry_minutes": 30, "changed_at": now}
+        values = {
+            "customer_name": user.name,
+            "customer_email": user.email,
+            "expiry_minutes": 30,
+            "changed_at": now,
+            "code_expiry_minutes": 10,
+        }
+        if template_key == "verify_email":
+            context["expiry_minutes"] = 10
         return template_key, context, values
 
     if template_key in ("order_status_updated", "order_cancelled", "order_delivered"):

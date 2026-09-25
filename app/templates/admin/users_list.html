@@ -20,7 +20,7 @@
           <td>{{ user.email }}</td>
           <td>{{ user.phone or '-' }}</td>
           <td><span class="badge bg-{{ 'primary' if user.role == 'admin' else 'light text-dark' }}">{{ user.role }}</span></td>
-          <td><span class="badge bg-{{ 'success' if user.is_active else 'secondary' }}">{{ 'Active' if user.is_active else 'Inactive' }}</span></td>
+          <td><span class="badge bg-{{ 'success' if user.is_active else 'secondary' }}">{{ 'Active' if user.is_active else 'Inactive' }}</span>{% if not user.is_email_verified %} <span class="badge text-bg-warning" title="Signed up but hasn't entered the emailed code yet">Email unverified</span>{% endif %}</td>
           <td class="small text-muted">{{ user.created_at|ist('%d %b %Y') }}</td>
           <td><a href="{{ url_for('admin.user_edit', user_id=user.id) }}" class="btn btn-sm btn-outline-secondary">Edit</a></td>
         </tr>

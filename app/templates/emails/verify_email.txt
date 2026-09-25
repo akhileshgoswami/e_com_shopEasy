@@ -1,0 +1,12 @@
+{% extends "emails/base_email.txt" %}
+{% import "emails/_components.txt" as ui %}
+{% block content %}{{ ui.intro(copy) }}
+
+Your verification code: {{ code }}
+
+It expires in {{ expiry_minutes }} minutes. Never share it with anyone.
+
+{{ copy.button_label }}: {{ verify_url }}
+
+Didn't sign up? You can ignore this email; no account will be activated without the code.
+{{ ui.note(copy) }}{% endblock %}

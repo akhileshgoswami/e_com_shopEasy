@@ -48,6 +48,16 @@ class RegisterForm(FlaskForm):
     )
 
 
+class VerifyEmailForm(FlaskForm):
+    code = StringField(
+        "Verification code",
+        validators=[
+            DataRequired(message="Enter the 6-digit code from the email."),
+            Regexp(r"^\s*\d{3}\s?\d{3}\s*$", message="The code is 6 digits."),
+        ],
+    )
+
+
 class LoginForm(FlaskForm):
     email = StringField("Email", validators=[DataRequired(), Email()])
     password = PasswordField("Password", validators=[DataRequired()])

@@ -17,6 +17,8 @@ def test_registration_creates_customer(client):
     assert user is not None
     assert user.role == Role.CUSTOMER
     assert user.check_password("Passw0rd!")
+    # Can't log in until the emailed code is entered (tests/test_email_verification.py).
+    assert user.email_verified is False
 
 
 def test_registration_duplicate_email_rejected(client, customer):

@@ -15,8 +15,16 @@ from app.auth.forms import (
     ProfileForm,
     RegisterForm,
     ResetPasswordForm,
+    VerifyEmailForm,
 )
-from app.auth.services import AuthError, AuthenticationService, ResetTokenError
+from app.auth.services import (
+    AuthError,
+    AuthenticationService,
+    EmailNotVerifiedError,
+    EmailVerificationService,
+    ResetTokenError,
+    VerificationError,
+)
 from app.extensions import limiter, oauth
 from app.models import Address, Order
 from app.services.email_service import EmailService
@@ -25,6 +33,9 @@ from app.wishlist.routes import PENDING_WISHLIST_SESSION_KEY
 from app.wishlist.services import WishlistError, WishlistService
 
 GOOGLE_OAUTH_NEXT_SESSION_KEY = "google_oauth_next"
+# Who is entering a sign-up code in this browser, and where to go after.
+PENDING_VERIFICATION_SESSION_KEY = "pending_verification_user_id"
+PENDING_VERIFICATION_NEXT_SESSION_KEY = "pending_verification_next"
 
 
 def _apply_pending_cart_action():
@@ -84,14 +95,103 @@ def register():
         except AuthError as exc:
             flash(str(exc), "danger")
         else:
+            next_url = _safe_next_url(request.args.get("next"))
+            if not user.is_email_verified:
+                _start_verification(user, next_url, first_code=True)
+                return redirect(url_for("auth.verify_email"))
             EmailService.send_registration_confirmation(user)
             login_user(user)
             flash("Welcome! Your account has been created.", "success")
-            next_url = _safe_next_url(request.args.get("next"))
             pending_redirect = _apply_pending_cart_action()
             return redirect(pending_redirect or next_url or url_for("shop.home"))
 
     return render_template("auth/register.html", form=form)
+
+
+def _start_verification(user, next_url, first_code=False):
+    """Email a code (unless one went out moments ago) and remember, in this
+    browser's session, whose code the verify page is asking for."""
+    session[PENDING_VERIFICATION_SESSION_KEY] = user.id
+    session[PENDING_VERIFICATION_NEXT_SESSION_KEY] = next_url
+    try:
+        code = EmailVerificationService.issue_code(user, force=first_code)
+    except VerificationError:
+        # A code was sent very recently; the page offers "Resend" once the
+        # cooldown is over.
+        flash(f"We've already sent a code to {user.email}. Check your inbox.", "info")
+        return
+    # The verify page itself says where the code went.
+    EmailService.send_verification_code(user, code)
+
+
+def _pending_verification_user():
+    from app.models import User
+
+    user = User.find(session.get(PENDING_VERIFICATION_SESSION_KEY))
+    if user is None or not user.is_active:
+        session.pop(PENDING_VERIFICATION_SESSION_KEY, None)
+        return None
+    return user
+
+
+@auth_bp.route("/verify-email", methods=["GET", "POST"])
+@limiter.limit("10 per 15 minutes", methods=["POST"])
+def verify_email():
+    if current_user.is_authenticated:
+        return redirect(url_for("shop.home"))
+    user = _pending_verification_user()
+    if user is None:
+        flash("Log in with your email and password to get a verification code.", "info")
+        return redirect(url_for("auth.login"))
+
+    form = VerifyEmailForm()
+    if form.validate_on_submit():
+        try:
+            user = EmailVerificationService.verify(user.id, form.code.data)
+        except VerificationError as exc:
+            form.code.errors.append(str(exc))
+        else:
+            next_url = session.pop(PENDING_VERIFICATION_NEXT_SESSION_KEY, None)
+            session.pop(PENDING_VERIFICATION_SESSION_KEY, None)
+            login_user(user)
+            EmailService.send_registration_confirmation(user)
+            flash(f"Your email is verified. Welcome, {user.name}!", "success")
+            pending_redirect = _apply_pending_cart_action()
+            return redirect(pending_redirect or next_url or url_for("shop.home"))
+
+    return render_template(
+        "auth/verify_email.html",
+        form=form,
+        email=user.email,
+        resend_wait=EmailVerificationService.seconds_until_resend(user),
+        expiry_minutes=current_app.config["EMAIL_OTP_EXPIRY_MINUTES"],
+    )
+
+
+@auth_bp.route("/verify-email/resend", methods=["POST"])
+@limiter.limit("5 per 15 minutes")
+def resend_verification():
+    user = _pending_verification_user()
+    if user is None:
+        return redirect(url_for("auth.login"))
+    if user.is_email_verified:
+        return redirect(url_for("auth.verify_email"))
+    try:
+        code = EmailVerificationService.issue_code(user)
+    except VerificationError as exc:
+        flash(str(exc), "warning")
+    else:
+        EmailService.send_verification_code(user, code)
+        flash(f"A new code is on its way to {user.email}.", "success")
+    return redirect(url_for("auth.verify_email"))
+
+
+@auth_bp.route("/verify-email/change", methods=["POST"])
+def change_signup_email():
+    """"Wrong email?" — forget the pending sign-up in this browser."""
+    session.pop(PENDING_VERIFICATION_SESSION_KEY, None)
+    session.pop(PENDING_VERIFICATION_NEXT_SESSION_KEY, None)
+    return redirect(url_for("auth.register"))
 
 
 @auth_bp.route("/login/google")
@@ -156,6 +256,9 @@ def login():
     if form.validate_on_submit():
         try:
             user = AuthenticationService.authenticate(form.email.data, form.password.data)
+        except EmailNotVerifiedError as exc:
+            _start_verification(exc.user, next_url)
+            return redirect(url_for("auth.verify_email"))
         except AuthError as exc:
             flash(str(exc), "danger")
         else:

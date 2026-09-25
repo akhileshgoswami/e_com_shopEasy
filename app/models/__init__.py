@@ -12,6 +12,7 @@ from app.models.coupon import Coupon, DiscountType
 from app.models.site_content import SiteContent
 from app.models.password_reset import PasswordResetToken
 from app.models.email_outbox import EmailOutbox, EmailStatus
+from app.models.email_verification import EmailVerificationCode
 
 __all__ = [
     "BaseModel",
@@ -42,4 +43,5 @@ __all__ = [
     "PasswordResetToken",
     "EmailOutbox",
     "EmailStatus",
+    "EmailVerificationCode",
 ]
