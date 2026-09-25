@@ -51,7 +51,17 @@ services:
       # requests send no such headers, so they're unaffected.
       TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-true}
       GCS_ENABLED: "false"
-      MAIL_ENABLED: "false"
+      # Emails are only logged unless you export MAIL_ENABLED=true plus the
+      # SMTP settings (see .env.example) before `docker compose up`.
+      MAIL_ENABLED: ${MAIL_ENABLED:-false}
+      MAIL_SERVER: ${MAIL_SERVER:-}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USE_TLS: ${MAIL_USE_TLS:-true}
+      MAIL_USE_SSL: ${MAIL_USE_SSL:-false}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_DEFAULT_SENDER: ${MAIL_DEFAULT_SENDER:-no-reply@example.com}
+      OWNER_EMAIL: ${OWNER_EMAIL:-}
     ports:
       - "8000:8080"
     depends_on:

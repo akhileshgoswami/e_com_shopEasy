@@ -22,7 +22,10 @@
 # Optional app secrets — stored in Secret Manager when set; re-run to rotate:
 #   RAZORPAY_KEY_ID RAZORPAY_KEY_SECRET RAZORPAY_WEBHOOK_SECRET
 #   GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET MAIL_PASSWORD
-# Email is enabled when MAIL_SERVER is set (plus MAIL_USERNAME, MAIL_DEFAULT_SENDER).
+# Email is enabled when MAIL_SERVER is set (plus MAIL_USERNAME, MAIL_DEFAULT_SENDER;
+# optional MAIL_PORT, MAIL_USE_TLS, MAIL_USE_SSL). OWNER_EMAIL receives new-order
+# alerts (several: separate with ";"). PASSWORD_RESET_TOKEN_EXPIRY_MINUTES
+# overrides the 30-minute reset-link lifetime.
 # SECRET_KEY is generated once automatically and never changes afterwards.
 
 set -euo pipefail
@@ -201,6 +204,14 @@ deploy() {
   if [ -n "${MAIL_SERVER:-}" ]; then
     env_vars+=",MAIL_ENABLED=true,MAIL_SERVER=${MAIL_SERVER},MAIL_USERNAME=${MAIL_USERNAME:-apikey}"
     env_vars+=",MAIL_DEFAULT_SENDER=${MAIL_DEFAULT_SENDER:-no-reply@example.com}"
+    env_vars+=",MAIL_PORT=${MAIL_PORT:-587},MAIL_USE_TLS=${MAIL_USE_TLS:-true},MAIL_USE_SSL=${MAIL_USE_SSL:-false}"
+  fi
+  if [ -n "${OWNER_EMAIL:-}" ]; then
+    # --set-env-vars splits on commas, so several owners must use ";".
+    env_vars+=",OWNER_EMAIL=${OWNER_EMAIL//,/;}"
+  fi
+  if [ -n "${PASSWORD_RESET_TOKEN_EXPIRY_MINUTES:-}" ]; then
+    env_vars+=",PASSWORD_RESET_TOKEN_EXPIRY_MINUTES=${PASSWORD_RESET_TOKEN_EXPIRY_MINUTES}"
   fi
 
   log "Building from source and deploying ${SERVICE} to ${REGION} (takes a few minutes)"

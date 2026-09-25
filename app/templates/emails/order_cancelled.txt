@@ -1,0 +1,10 @@
+{% extends "emails/base_email.txt" %}
+{% import "emails/_components.txt" as ui %}
+{% block content %}{{ ui.intro(copy) }}
+{% if refund_due %}
+You paid {{ ui.money(order.total_amount) }} online. Your refund will be issued to the original payment method; banks usually take 5-7 business days to show it.
+{% endif %}
+{{ copy.button_label }}: {{ view_order_url }}
+
+{{ ui.order_summary(order, items) }}
+{{ ui.note(copy) }}{% endblock %}

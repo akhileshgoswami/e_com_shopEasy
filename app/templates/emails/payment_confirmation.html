@@ -1,6 +1,14 @@
 {% extends "emails/base_email.html" %}
-{% block email_body %}
-<h2>Payment received &mdash; {{ order.order_number }}</h2>
-<p>Hi {{ order.user.name }}, we've received your payment of ₹{{ '%.2f'|format(order.total_amount) }} for order {{ order.order_number }}.</p>
-<p>Your order is now being processed.</p>
+{% import "emails/_components.html" as ui with context %}
+{% block preheader %}We've received {{ ui.money(order.total_amount) }} for order #{{ order.order_number }}.{% endblock %}
+{% block content %}
+{{ ui.intro(copy) }}
+{{ ui.details([
+  ("Order number", "#" ~ order.order_number),
+  ("Payment method", payment_method_label),
+  ("Payment status", payment_status_label),
+  ("Order status", status_label),
+]) }}
+{{ ui.button(view_order_url, copy.button_label) }}
+{{ ui.note(copy) }}
 {% endblock %}

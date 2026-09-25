@@ -1,0 +1,111 @@
+{% extends "admin/base.html" %}
+{% block title %}{{ spec.name }} email - Admin{% endblock %}
+{% block admin_content %}
+<nav aria-label="breadcrumb"><ol class="breadcrumb small">
+  <li class="breadcrumb-item"><a href="{{ url_for('admin.email_templates') }}">Email templates</a></li>
+  <li class="breadcrumb-item active">{{ spec.name }}</li>
+</ol></nav>
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+  <div>
+    <h1 class="h4 mb-1">{{ spec.name }} {% if customized %}<span class="badge text-bg-primary fs-6 align-middle">customized</span>{% endif %}</h1>
+    <p class="text-muted small mb-0">Sent to: {{ spec.audience }} &middot; {{ spec.trigger }}</p>
+  </div>
+  {% if customized %}
+  <form method="post" action="{{ url_for('admin.email_template_reset', key=key) }}" data-confirm="Discard your changes and go back to the default wording for this email?">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-arrow-counterclockwise"></i> Reset to default</button>
+  </form>
+  {% endif %}
+</div>
+
+<div class="row g-4">
+  <div class="col-xl-5">
+    <div class="card card-body">
+      <form method="post" novalidate data-email-template-form>
+        {{ form.hidden_tag() }}
+        {% for field in (form.subject, form.heading, form.intro, form.button_label, form.note) %}
+        <div class="mb-3">
+          <label for="{{ field.id }}" class="form-label fw-semibold small mb-1">{{ field.label.text }}</label>
+          {% if field.type == 'TextAreaField' %}
+            {{ field(class="form-control" ~ (" is-invalid" if field.errors else ""), rows=(6 if field.name == 'intro' else 3)) }}
+          {% else %}
+            {{ field(class="form-control" ~ (" is-invalid" if field.errors else "")) }}
+          {% endif %}
+          {% for error in field.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+          {% if field.name == 'intro' %}<div class="form-text">Leave a blank line to start a new paragraph.</div>{% endif %}
+          {% if field.name == 'note' %}<div class="form-text">Shown near the end of the email — e.g. a return policy reminder or a discount code.{% if spec.note_help %} {{ spec.note_help }}{% endif %}</div>{% endif %}
+          {% if field.data != defaults[field.name] %}<div class="form-text"><a href="#" data-restore="{{ field.id }}" data-default="{{ defaults[field.name] }}">Restore default</a></div>{% endif %}
+        </div>
+        {% endfor %}
+
+        <div class="d-flex flex-wrap gap-2">
+          <button type="submit" name="action" value="save" class="btn btn-primary"><i class="bi bi-check-lg"></i> Save</button>
+          <button type="submit" name="action" value="preview" class="btn btn-outline-secondary"><i class="bi bi-eye"></i> Preview changes</button>
+          <button type="submit" name="action" value="test" class="btn btn-outline-secondary" title="Sends this version, with sample order data, to {{ current_user.email }}"><i class="bi bi-send"></i> Send test to me</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card card-body mt-3">
+      <h2 class="h6 mb-2">Placeholders</h2>
+      <p class="small text-muted mb-2">Type these anywhere above; they're replaced with the real values when the email is sent. Click one to insert it.</p>
+      <div class="d-flex flex-wrap gap-2">
+        {% for name, help in placeholders %}
+        <button type="button" class="btn btn-sm btn-light border font-monospace" style="text-transform:none;letter-spacing:0;" data-placeholder="{{ '{' ~ name ~ '}' }}" title="{{ help }}">{{ '{' ~ name ~ '}' }}</button>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-xl-7">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div class="small">
+          <span class="text-muted">Subject:</span> <strong>{{ preview_subject }}</strong>
+          {% if is_draft_preview %}<span class="badge text-bg-warning ms-1">unsaved preview</span>{% endif %}
+        </div>
+        <ul class="nav nav-pills nav-sm small" role="tablist">
+          <li class="nav-item"><button class="nav-link py-1 px-2 active" data-bs-toggle="pill" data-bs-target="#previewHtml" type="button" role="tab">Email</button></li>
+          <li class="nav-item"><button class="nav-link py-1 px-2" data-bs-toggle="pill" data-bs-target="#previewText" type="button" role="tab">Plain text</button></li>
+        </ul>
+      </div>
+      <div class="tab-content">
+        <div class="tab-pane fade show active" id="previewHtml" role="tabpanel">
+          {# srcdoc + an empty sandbox: the email renders in isolation with no scripts. #}
+          <iframe title="Email preview" srcdoc="{{ preview_html }}" sandbox="" style="width:100%;height:900px;border:0;display:block;background:#f3f4f6;"></iframe>
+        </div>
+        <div class="tab-pane fade" id="previewText" role="tabpanel">
+          <pre class="p-3 mb-0 small" style="white-space:pre-wrap;max-height:900px;overflow:auto;">{{ preview_text }}</pre>
+        </div>
+      </div>
+      <div class="card-footer small text-muted">Preview uses sample data (order ORD-20260101-SAMPLE, customer Priya Sharma).</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const form = document.querySelector("[data-email-template-form]");
+  if (!form) return;
+  let last = form.querySelector("#{{ form.intro.id }}");
+  form.querySelectorAll("input[type=text], textarea").forEach((el) => el.addEventListener("focus", () => { last = el; }));
+  document.querySelectorAll("[data-placeholder]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const token = btn.dataset.placeholder;
+      const start = last.selectionStart ?? last.value.length;
+      const end = last.selectionEnd ?? last.value.length;
+      last.value = last.value.slice(0, start) + token + last.value.slice(end);
+      last.focus();
+      last.setSelectionRange(start + token.length, start + token.length);
+    });
+  });
+  form.querySelectorAll("[data-restore]").forEach((link) => {
+    link.addEventListener("click", (event) => {
+      event.preventDefault();
+      document.getElementById(link.dataset.restore).value = link.dataset.default;
+    });
+  });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends "emails/base_email.txt" %}
+{% import "emails/_components.txt" as ui %}
+{% block content %}{{ ui.intro(copy) }}
+
+Order: #{{ order.order_number }}
+Status: {% if old_status_label %}{{ old_status_label }} -> {% endif %}{{ new_status_label }}
+{% if show_tracking and order.tracking_number %}Tracking number: {{ order.tracking_number }}
+{% endif %}{% if show_tracking and order.tracking_url %}Track your package: {{ order.tracking_url }}
+{% endif %}{% if show_eta %}Estimated delivery: {{ order.estimated_delivery_date.strftime("%a, %d %b %Y") }}
+{% endif %}
+{{ copy.button_label }}: {{ view_order_url }}
+
+{{ ui.order_summary(order, items) }}
+{{ ui.note(copy) }}{% endblock %}

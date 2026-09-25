@@ -1,0 +1,24 @@
+{% extends "emails/base_email.html" %}
+{% import "emails/_components.html" as ui with context %}
+{% block preheader %}{{ status_message }}{% endblock %}
+{% block content %}
+{{ ui.intro(copy) }}
+<p style="margin:0 0 20px 0;">
+  {% if old_status_label %}<span style="color:#6b7280;text-decoration:line-through;">{{ old_status_label }}</span> &rarr; {% endif %}{{ ui.status_pill(new_status_label) }}
+</p>
+{% if show_tracking or show_eta %}
+{{ ui.section_title("Delivery details") }}
+{{ ui.details([
+  ("Tracking number", order.tracking_number if show_tracking else None),
+  ("Estimated delivery", order.estimated_delivery_date.strftime("%a, %d %b %Y") if show_eta else None),
+]) }}
+{% endif %}
+{% if show_tracking and order.tracking_url %}
+{{ ui.button(order.tracking_url, "Track Package") }}
+{{ ui.button(view_order_url, copy.button_label, secondary=true) }}
+{% else %}
+{{ ui.button(view_order_url, copy.button_label) }}
+{% endif %}
+{{ ui.order_summary(order, items, show_images=false) }}
+{{ ui.note(copy) }}
+{% endblock %}

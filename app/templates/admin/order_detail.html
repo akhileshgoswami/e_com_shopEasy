@@ -17,6 +17,7 @@
         <p class="mb-1"><strong>{{ order.user.name }}</strong></p>
         <p class="mb-1 small text-muted">{{ order.user.email }}</p>
         <p class="mb-0 small text-muted">{{ order.user.phone or '-' }}</p>
+        {% if order.notes %}<p class="mt-2 mb-0 small"><span class="text-muted">Notes:</span> {{ order.notes }}</p>{% endif %}
       </div>
     </div>
 
@@ -110,6 +111,15 @@
       <div class="d-flex justify-content-between fw-bold"><span>Total</span><span>₹{{ '%.2f'|format(order.total_amount) }}</span></div>
     </div>
 
+    {% if order.tracking_number or order.tracking_url or order.estimated_delivery_date %}
+    <div class="card card-body mb-3">
+      <h2 class="h6">Shipment</h2>
+      {% if order.tracking_number %}<p class="small mb-1"><span class="text-muted">Tracking number:</span> {{ order.tracking_number }}</p>{% endif %}
+      {% if order.tracking_url %}<p class="small mb-1"><a href="{{ order.tracking_url }}" target="_blank" rel="noopener noreferrer">Tracking link <i class="bi bi-box-arrow-up-right"></i></a></p>{% endif %}
+      {% if order.estimated_delivery_date %}<p class="small mb-0"><span class="text-muted">Estimated delivery:</span> {{ order.estimated_delivery_date.strftime('%d %b %Y') }}</p>{% endif %}
+    </div>
+    {% endif %}
+
     <div class="card card-body mb-3">
       <h2 class="h6">Shipping address</h2>
       <p class="mb-0 small">
@@ -139,6 +149,17 @@
         <div class="mb-2">
           {{ form.note(class="form-control form-control-sm", placeholder="Note (optional)") }}
         </div>
+        {% set shipping_choices = ('shipped', 'out_for_delivery') %}
+        {% if form.new_status.choices|map('first')|select('in', shipping_choices)|list %}
+        <div class="border rounded p-2 mb-2 d-none" data-tracking-fields>
+          <p class="small fw-semibold mb-2">Shipment details <span class="text-muted fw-normal">(optional, emailed to the customer)</span></p>
+          {{ form.tracking_number(class="form-control form-control-sm mb-2", placeholder="Tracking number", value=order.tracking_number or "") }}
+          {{ form.tracking_url(class="form-control form-control-sm mb-2", placeholder="https://courier.example/track/…", type="url", value=order.tracking_url or "") }}
+          <label class="form-label small mb-1" for="{{ form.estimated_delivery_date.id }}">Estimated delivery</label>
+          {{ form.estimated_delivery_date(class="form-control form-control-sm", value=order.estimated_delivery_date.isoformat() if order.estimated_delivery_date else "") }}
+        </div>
+        {% endif %}
+        <p class="small text-muted mb-2"><i class="bi bi-envelope"></i> The customer is emailed about the new status.</p>
         <button type="submit" class="btn btn-sm btn-primary w-100">Update status</button>
       </form>
       <script>
@@ -146,8 +167,12 @@
       (function () {
         const select = document.querySelector("[data-status-select]");
         const reason = document.querySelector("[data-cancel-reason]");
-        if (!select || !reason) return;
-        const sync = () => reason.classList.toggle("d-none", select.value !== "cancelled");
+        const tracking = document.querySelector("[data-tracking-fields]");
+        if (!select) return;
+        const sync = () => {
+          if (reason) reason.classList.toggle("d-none", select.value !== "cancelled");
+          if (tracking) tracking.classList.toggle("d-none", !["shipped", "out_for_delivery"].includes(select.value));
+        };
         select.addEventListener("change", sync);
         sync();
       })();

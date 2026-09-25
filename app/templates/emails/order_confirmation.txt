@@ -1,0 +1,16 @@
+{% extends "emails/base_email.txt" %}
+{% import "emails/_components.txt" as ui %}
+{% block content %}{{ ui.intro(copy) }}
+
+Order number: #{{ order.order_number }}
+Order date: {{ order.created_at|ist }}
+Order status: {{ status_label }}
+Payment method: {{ payment_method_label }}
+Payment status: {{ payment_status_label }}
+{% if order.payment_method == "cod" and order.payment_status != "paid" %}
+Please keep {{ ui.money(order.total_amount) }} ready to pay when your order arrives.
+{% endif %}
+{{ copy.button_label }}: {{ view_order_url }}
+
+{{ ui.order_summary(order, items) }}
+{{ ui.note(copy) }}{% endblock %}

@@ -1,0 +1,12 @@
+{% extends "emails/base_email.html" %}
+{% import "emails/_components.html" as ui with context %}
+{% block preheader %}Your order #{{ order.order_number }} has been cancelled.{% endblock %}
+{% block content %}
+{{ ui.intro(copy) }}
+{% if refund_due %}
+{% call ui.notice("info") %}You paid {{ ui.money(order.total_amount) }} online. Your refund will be issued to the original payment method; banks usually take 5–7 business days to show it.{% endcall %}
+{% endif %}
+{{ ui.button(view_order_url, copy.button_label) }}
+{{ ui.order_summary(order, items, show_images=false) }}
+{{ ui.note(copy) }}
+{% endblock %}

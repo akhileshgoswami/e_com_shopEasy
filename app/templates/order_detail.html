@@ -124,6 +124,15 @@
         <p class="mb-0 small"><span class="text-muted">Status:</span> {{ order.payment_status }}</p>
       </div>
 
+      {% if order.tracking_number or order.tracking_url or order.estimated_delivery_date %}
+      <div class="card card-body mb-3">
+        <h2 class="h6">Shipment</h2>
+        {% if order.tracking_number %}<p class="mb-1 small"><span class="text-muted">Tracking number:</span> {{ order.tracking_number }}</p>{% endif %}
+        {% if order.estimated_delivery_date and order.order_status in ('shipped', 'out_for_delivery') %}<p class="mb-1 small"><span class="text-muted">Estimated delivery:</span> {{ order.estimated_delivery_date.strftime('%a, %d %b %Y') }}</p>{% endif %}
+        {% if order.tracking_url %}<a href="{{ order.tracking_url }}" class="btn btn-sm btn-outline-primary mt-1" target="_blank" rel="noopener noreferrer"><i class="bi bi-truck"></i> Track package</a>{% endif %}
+      </div>
+      {% endif %}
+
       <div class="card card-body">
         <h2 class="h6">Shipping address</h2>
         <p class="mb-0 small">

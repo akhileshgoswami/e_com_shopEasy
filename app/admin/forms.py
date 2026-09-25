@@ -2,6 +2,7 @@ from flask_wtf import FlaskForm
 from flask_wtf.file import FileAllowed, FileField
 from wtforms import (
     BooleanField,
+    DateField,
     DecimalField,
     HiddenField,
     IntegerField,
@@ -75,6 +76,18 @@ class StockUpdateForm(FlaskForm):
 class OrderStatusForm(FlaskForm):
     new_status = SelectField("New status", validators=[DataRequired()])
     note = StringField("Note", validators=[Optional(), Length(max=500)])
+    # Optional shipment details, emailed to the customer with the update.
+    tracking_number = StringField("Tracking number", validators=[Optional(), Length(max=100)])
+    tracking_url = StringField(
+        "Tracking link",
+        validators=[
+            Optional(),
+            Length(max=500),
+            # http(s) only: this becomes a button in the customer's email.
+            Regexp(r"^https?://[^\s<>\"']+$", message="Enter a full http:// or https:// tracking link."),
+        ],
+    )
+    estimated_delivery_date = DateField("Estimated delivery", validators=[Optional()])
 
 
 class UserEditForm(FlaskForm):
@@ -179,3 +192,13 @@ class PaymentSettingsForm(FlaskForm):
     razorpay_key_secret = PasswordField("Key Secret", validators=[Optional(), Length(max=128)])
     razorpay_webhook_secret = PasswordField("Webhook Secret", validators=[Optional(), Length(max=128)])
     clear_saved_keys = BooleanField("Remove the keys saved here and use the server's default keys")
+
+
+class EmailTemplateForm(FlaskForm):
+    """Wording of one transactional email; see EmailTemplateService."""
+
+    subject = StringField("Subject line", validators=[DataRequired(), Length(max=200)])
+    heading = StringField("Heading", validators=[DataRequired(), Length(max=150)])
+    intro = TextAreaField("Main message", validators=[DataRequired(), Length(max=3000)])
+    button_label = StringField("Button label", validators=[DataRequired(), Length(max=40)])
+    note = TextAreaField("Extra note (optional)", validators=[Optional(), Length(max=1500)])

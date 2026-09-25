@@ -22,6 +22,11 @@ class User(UserMixin, BaseModel):
 
     failed_login_attempts = ndb.IntegerProperty(default=0, indexed=False)
     locked_until = UTCDateTimeProperty(indexed=False)
+    # Bumped on every password change/reset. It is part of the Flask-Login
+    # id, so sessions and "remember me" cookies issued before the change
+    # stop working everywhere at once.
+    session_version = ndb.IntegerProperty(default=0, indexed=False)
+    password_changed_at = UTCDateTimeProperty(indexed=False)
 
     @classmethod
     def by_email(cls, email):
@@ -55,8 +60,29 @@ class User(UserMixin, BaseModel):
     def is_admin(self):
         return self.role == Role.ADMIN
 
+    def revoke_sessions(self):
+        self.session_version = (self.session_version or 0) + 1
+
     def get_id(self):
+        # Accounts that never changed their password keep the plain id, so
+        # existing sessions survive this field being introduced.
+        if self.session_version:
+            return f"{self.id}:{self.session_version}"
         return str(self.id)
+
+    @classmethod
+    def from_session_id(cls, session_id):
+        """Inverse of get_id(): None when the id is malformed, the user is
+        gone, or the password changed since the session was issued."""
+        raw_id, _, version = str(session_id or "").partition(":")
+        try:
+            version = int(version or 0)
+        except ValueError:
+            return None
+        user = cls.find(raw_id)
+        if user is None or version != (user.session_version or 0):
+            return None
+        return user
 
     def __repr__(self):
         return f"<User {self.email}>"

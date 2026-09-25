@@ -10,6 +10,8 @@ from app.models.order import Order, OrderItem, OrderStatusHistory, OrderStatus, 
 from app.models.payment import Payment, WebhookEvent, PaymentProvider
 from app.models.coupon import Coupon, DiscountType
 from app.models.site_content import SiteContent
+from app.models.password_reset import PasswordResetToken
+from app.models.email_outbox import EmailOutbox, EmailStatus
 
 __all__ = [
     "BaseModel",
@@ -37,4 +39,7 @@ __all__ = [
     "Coupon",
     "DiscountType",
     "SiteContent",
+    "PasswordResetToken",
+    "EmailOutbox",
+    "EmailStatus",
 ]

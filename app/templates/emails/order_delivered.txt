@@ -1,0 +1,10 @@
+{% extends "emails/base_email.txt" %}
+{% import "emails/_components.txt" as ui %}
+{% block content %}{{ ui.intro(copy) }}
+{% if order.tracking_number %}
+Tracking number: {{ order.tracking_number }}
+{% endif %}
+{{ copy.button_label }}: {{ view_order_url }}
+
+{{ ui.order_summary(order, items) }}
+{{ ui.note(copy) }}{% endblock %}

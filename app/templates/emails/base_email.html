@@ -1,14 +1,67 @@
+{#- Shared layout for every HTML email. Table-based with inline styles so it
+    renders in Gmail, Outlook and Apple Mail; the <style> block only adds
+    mobile tweaks for clients that support media queries. -#}
 <!DOCTYPE html>
-<html>
-<body style="font-family: Arial, sans-serif; background: #f8f9fb; padding: 24px; color: #212529;">
-  <div style="max-width: 560px; margin: 0 auto; background: #fff; border-radius: 8px; overflow: hidden;">
-    <div style="background: #2f5233; color: #fff; padding: 20px; font-size: 20px; font-weight: bold;">{{ site_name|default("ShopEasy") }}</div>
-    <div style="padding: 24px;">
-      {% block email_body %}{% endblock %}
-    </div>
-    <div style="padding: 16px 24px; color: #868e96; font-size: 12px; border-top: 1px solid #eee;">
-      This is an automated message from {{ site_name|default("ShopEasy") }}. Please do not reply to this email.
-    </div>
-  </div>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="x-apple-disable-message-reformatting">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<title>{{ subject }}</title>
+<style>
+  body { margin: 0; padding: 0; -webkit-text-size-adjust: 100%; }
+  img { border: 0; line-height: 100%; outline: none; text-decoration: none; }
+  a { color: {{ brand.accent }}; }
+  @media only screen and (max-width: 620px) {
+    .email-container { width: 100% !important; border-radius: 0 !important; }
+    .px { padding-left: 20px !important; padding-right: 20px !important; }
+    .stack, .stack > tbody > tr > td { display: block !important; width: 100% !important; }
+    .stack-gap { padding-left: 0 !important; padding-top: 16px !important; }
+    .item-img { width: 48px !important; height: 48px !important; }
+    .btn-link { display: block !important; }
+  }
+</style>
+</head>
+<body style="margin:0;padding:0;background-color:#f3f4f6;">
+{#- Inbox preview text, hidden in the body. -#}
+<div style="display:none;max-height:0;max-width:0;overflow:hidden;opacity:0;mso-hide:all;">{% block preheader %}{{ subject }}{% endblock %}&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f3f4f6;">
+  <tr>
+    <td align="center" style="padding:24px 12px;">
+      <table role="presentation" class="email-container" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;background-color:#ffffff;border-radius:12px;overflow:hidden;border-top:4px solid {{ brand.accent }};">
+        <tr>
+          <td class="px" style="padding:24px 32px 8px 32px;">
+            <a href="{{ home_url }}" style="text-decoration:none;color:{{ brand.accent }};font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:22px;font-weight:700;">
+              {%- if logo_url -%}
+              <img src="{{ logo_url }}" alt="{{ store_name }}" height="40" style="display:block;height:40px;width:auto;max-width:200px;">
+              {%- else -%}
+              {{ store_name }}
+              {%- endif -%}
+            </a>
+          </td>
+        </tr>
+        <tr>
+          <td class="px" style="padding:16px 32px 32px 32px;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.6;color:#1f2937;">
+            {% block content %}{% endblock %}
+          </td>
+        </tr>
+        <tr>
+          <td class="px" style="padding:24px 32px;background-color:#f9fafb;border-top:1px solid #e5e7eb;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:1.6;color:#6b7280;">
+            <p style="margin:0 0 6px 0;font-weight:600;color:#374151;">{{ store_name }}</p>
+            <p style="margin:0 0 6px 0;">
+              Need help? Email <a href="mailto:{{ support_email }}" style="color:{{ brand.accent }};">{{ support_email }}</a>
+              {%- if support_phone %} or call {{ support_phone }}{% endif %}.
+            </p>
+            {% if support_address %}<p style="margin:0 0 6px 0;">{{ support_address }}</p>{% endif %}
+            <p style="margin:12px 0 0 0;">{% block footer_note %}This is an automated message about your account or order. Please don't reply to this email.{% endblock %}</p>
+            <p style="margin:6px 0 0 0;">&copy; {{ year }} {{ store_name }} &middot; <a href="{{ home_url }}" style="color:#6b7280;">{{ base_url | replace("https://", "") | replace("http://", "") }}</a></p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
 </body>
 </html>

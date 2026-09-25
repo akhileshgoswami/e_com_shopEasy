@@ -1,0 +1,140 @@
+{#- Reusable HTML email blocks. Import with context so brand colors reach
+    the macros:  {% import "emails/_components.html" as ui with context %} -#}
+
+{% macro money(value) -%}
+&#8377;{{ '%.2f'|format(value or 0) }}
+{%- endmacro %}
+
+{% macro heading(text) -%}
+<h1 style="margin:0 0 12px 0;font-size:22px;line-height:1.3;font-weight:700;color:#111827;">{{ text }}</h1>
+{%- endmacro %}
+
+{% macro paragraph() -%}
+<p style="margin:0 0 16px 0;">{{ caller() }}</p>
+{%- endmacro %}
+
+{#- secondary=true gives an outlined button, for a second action. -#}
+{% macro button(url, label, secondary=false) -%}
+{%- set bg = "#ffffff" if secondary else brand.accent -%}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:{{ '0 0 24px 0' if secondary else '24px 0' }};">
+  <tr>
+    <td align="center" bgcolor="{{ bg }}" style="border-radius:8px;background-color:{{ bg }};{{ 'border:2px solid ' ~ brand.accent ~ ';' if secondary }}">
+      <a class="btn-link" href="{{ url }}" target="_blank" rel="noopener" style="display:inline-block;padding:{{ '11px 26px' if secondary else '13px 28px' }};font-size:15px;font-weight:600;color:{{ brand.accent if secondary else '#ffffff' }};text-decoration:none;border-radius:8px;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">{{ label }}</a>
+    </td>
+  </tr>
+</table>
+{%- endmacro %}
+
+{% macro notice(tone="info") -%}
+{%- set colors = {"info": ("#eff6ff", "#1e40af"), "warning": ("#fffbeb", "#92400e"), "success": ("#ecfdf5", "#065f46"), "danger": ("#fef2f2", "#991b1b")}[tone] -%}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 20px 0;">
+  <tr><td style="padding:12px 16px;border-radius:8px;background-color:{{ colors[0] }};color:{{ colors[1] }};font-size:14px;line-height:1.5;">{{ caller() }}</td></tr>
+</table>
+{%- endmacro %}
+
+{% macro status_pill(label) -%}
+<span style="display:inline-block;padding:3px 10px;border-radius:999px;background-color:{{ brand.accent_soft }};color:{{ brand.accent_dark }};font-size:13px;font-weight:600;">{{ label }}</span>
+{%- endmacro %}
+
+{#- rows: list of (label, value) pairs; empty values are skipped. -#}
+{% macro details(rows) -%}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 20px 0;border:1px solid #e5e7eb;border-radius:8px;">
+  {%- for label, value in rows if value %}
+  <tr>
+    <td style="padding:9px 14px;font-size:13px;color:#6b7280;width:40%;{{ 'border-top:1px solid #f3f4f6;' if not loop.first }}">{{ label }}</td>
+    <td style="padding:9px 14px;font-size:14px;color:#111827;font-weight:500;{{ 'border-top:1px solid #f3f4f6;' if not loop.first }}">{{ value }}</td>
+  </tr>
+  {%- endfor %}
+</table>
+{%- endmacro %}
+
+{% macro section_title(text) -%}
+<h2 style="margin:24px 0 10px 0;font-size:15px;font-weight:700;color:#111827;text-transform:uppercase;letter-spacing:.04em;">{{ text }}</h2>
+{%- endmacro %}
+
+{% macro order_items(items, show_images=true, show_sku=false) -%}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 8px 0;">
+  {%- for item in items %}
+  <tr>
+    <td style="padding:12px 0;border-bottom:1px solid #f3f4f6;vertical-align:top;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          {%- if show_images %}
+          <td width="64" style="width:64px;vertical-align:top;padding-right:12px;">
+            {%- if item.image_url %}
+            <img class="item-img" src="{{ item.image_url }}" alt="" width="56" height="56" style="display:block;width:56px;height:56px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;">
+            {%- else %}
+            <div class="item-img" style="width:56px;height:56px;border-radius:6px;background-color:#f3f4f6;"></div>
+            {%- endif %}
+          </td>
+          {%- endif %}
+          <td style="vertical-align:top;font-size:14px;color:#111827;">
+            <div style="font-weight:600;">{{ item.name }}</div>
+            <div style="font-size:13px;color:#6b7280;">
+              {%- if item.size %}Size: {{ item.size }} &middot; {% endif -%}
+              Qty: {{ item.quantity }} &times; {{ money(item.unit_price) }}
+              {%- if show_sku %} &middot; SKU: {{ item.sku }}{% endif %}
+            </div>
+          </td>
+          <td align="right" style="vertical-align:top;font-size:14px;font-weight:600;color:#111827;white-space:nowrap;padding-left:8px;">{{ money(item.subtotal) }}</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  {%- endfor %}
+</table>
+{%- endmacro %}
+
+{% macro totals(order) -%}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 20px 0;font-size:14px;">
+  <tr><td style="padding:4px 0;color:#6b7280;">Subtotal</td><td align="right" style="padding:4px 0;">{{ money(order.subtotal) }}</td></tr>
+  {%- if order.discount %}
+  <tr><td style="padding:4px 0;color:#047857;">Discount{% if order.coupon_code %} ({{ order.coupon_code }}){% endif %}</td><td align="right" style="padding:4px 0;color:#047857;">&minus;{{ money(order.discount) }}</td></tr>
+  {%- endif %}
+  <tr><td style="padding:4px 0;color:#6b7280;">Shipping</td><td align="right" style="padding:4px 0;">{% if order.shipping_charge %}{{ money(order.shipping_charge) }}{% else %}Free{% endif %}</td></tr>
+  {%- if order.tax %}
+  <tr><td style="padding:4px 0;color:#6b7280;">Tax</td><td align="right" style="padding:4px 0;">{{ money(order.tax) }}</td></tr>
+  {%- endif %}
+  <tr><td style="padding:10px 0 0 0;border-top:1px solid #e5e7eb;font-size:16px;font-weight:700;color:#111827;">Total</td><td align="right" style="padding:10px 0 0 0;border-top:1px solid #e5e7eb;font-size:16px;font-weight:700;color:#111827;">{{ money(order.total_amount) }}</td></tr>
+</table>
+{%- endmacro %}
+
+{% macro shipping_address(order) -%}
+<p style="margin:0 0 20px 0;font-size:14px;line-height:1.6;color:#374151;">
+  <strong>{{ order.shipping_name }}</strong><br>
+  {{ order.shipping_address }}<br>
+  {{ order.shipping_city }}, {{ order.shipping_state }} {{ order.shipping_postal_code }}<br>
+  {{ order.shipping_country }}<br>
+  Phone: {{ order.shipping_phone }}
+</p>
+{%- endmacro %}
+
+{#- Items, totals and delivery address: the summary every order email shares. -#}
+{% macro order_summary(order, items, show_images=true) -%}
+{{ section_title("Order summary") }}
+{{ order_items(items, show_images=show_images) }}
+{{ totals(order) }}
+{{ section_title("Shipping to") }}
+{{ shipping_address(order) }}
+{%- endmacro %}
+
+{#- Admin-editable wording (EmailTemplateService): paragraphs are lists of
+    lines, so every piece is escaped and line breaks are ours. -#}
+{% macro rich_text(blocks, size="15px", color="#1f2937") -%}
+{%- for lines in blocks %}
+<p style="margin:0 0 16px 0;font-size:{{ size }};color:{{ color }};">{% for line in lines %}{{ line }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
+{%- endfor %}
+{%- endmacro %}
+
+{% macro intro(copy) -%}
+{{ heading(copy.heading) }}
+{{ rich_text(copy.intro_paragraphs) }}
+{%- endmacro %}
+
+{% macro note(copy) -%}
+{%- if copy.note_paragraphs %}
+<div style="margin:8px 0 0 0;padding:14px 16px;border-left:3px solid {{ brand.accent }};background-color:#f9fafb;border-radius:4px;">
+{{ rich_text(copy.note_paragraphs, size="14px", color="#374151") }}
+</div>
+{%- endif %}
+{%- endmacro %}

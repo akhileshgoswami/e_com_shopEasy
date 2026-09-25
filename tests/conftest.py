@@ -140,3 +140,19 @@ def fake_image_bytes():
     Image.new("RGB", (100, 100), color="red").save(buf, format="PNG")
     buf.seek(0)
     return buf
+
+
+@pytest.fixture()
+def mail_outbox(app):
+    """Turn email sending on and record every message. MAIL_SUPPRESS_SEND
+    (TestingConfig) guarantees no SMTP connection is ever opened."""
+    from app.extensions import mail
+
+    assert app.extensions["mail"].suppress
+    app.config["MAIL_ENABLED"] = True
+    with mail.record_messages() as outbox:
+        yield outbox
+
+
+def messages_to(outbox, address):
+    return [m for m in outbox if address in m.recipients]

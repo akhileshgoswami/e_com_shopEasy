@@ -1,0 +1,39 @@
+{#- Plain-text counterparts of emails/_components.html. -#}
+
+{% macro money(value) -%}
+Rs. {{ '%.2f'|format(value or 0) }}
+{%- endmacro %}
+
+{% macro order_summary(order, items) -%}
+ORDER SUMMARY
+{% for item in items -%}
+- {{ item.name }}{% if item.size %} (Size: {{ item.size }}){% endif %}: {{ item.quantity }} x {{ money(item.unit_price) }} = {{ money(item.subtotal) }}
+{% endfor %}
+Subtotal: {{ money(order.subtotal) }}
+{% if order.discount %}Discount{% if order.coupon_code %} ({{ order.coupon_code }}){% endif %}: -{{ money(order.discount) }}
+{% endif -%}
+Shipping: {% if order.shipping_charge %}{{ money(order.shipping_charge) }}{% else %}Free{% endif %}
+{% if order.tax %}Tax: {{ money(order.tax) }}
+{% endif -%}
+Total: {{ money(order.total_amount) }}
+
+SHIPPING TO
+{{ order.shipping_name }}
+{{ order.shipping_address }}
+{{ order.shipping_city }}, {{ order.shipping_state }} {{ order.shipping_postal_code }}
+{{ order.shipping_country }}
+Phone: {{ order.shipping_phone }}
+{%- endmacro %}
+
+{% macro intro(copy) -%}
+{{ copy.heading }}
+
+{{ copy.intro }}
+{%- endmacro %}
+
+{% macro note(copy) -%}
+{% if copy.note %}
+
+{{ copy.note }}
+{% endif %}
+{%- endmacro %}

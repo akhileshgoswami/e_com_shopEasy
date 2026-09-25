@@ -32,16 +32,25 @@ class OrderService:
         return Pagination(newest_first(Order.all(Order.user_id == user.id)), page, per_page)
 
     @classmethod
-    def change_status(cls, order, new_status, changed_by, note=None, force=False):
+    def change_status(cls, order, new_status, changed_by, note=None, force=False, notify=True, tracking=None):
         """Returns the updated order. The transition is validated against
         the order as re-read inside the transaction, so two admins acting
-        at once can't both restore the same stock."""
+        at once can't both restore the same stock.
+
+        The customer is emailed only after the transaction commits, only
+        when the status really changed, and at most once per transition.
+        tracking: optional {"tracking_number", "tracking_url",
+        "estimated_delivery_date"}; empty values leave the stored ones."""
         if new_status not in OrderStatus.CHOICES:
             raise OrderTransitionError(f"Unknown status '{new_status}'.")
+        tracking = {k: v for k, v in (tracking or {}).items() if v}
 
         # Order lines never change after checkout, so read them up front:
         # transactions should only do key lookups.
         items = [item for item in order.items if item.product_id]
+        # A known id for the history row keys the status email (one per
+        # transition) without waiting on the commit to assign it.
+        history_key = OrderStatusHistory.allocate_ids(1)[0]
 
         def txn():
             current = order.key.get()
@@ -50,7 +59,7 @@ class OrderService:
             if not force and new_status != old_status and new_status not in allowed:
                 raise OrderTransitionError(f"Cannot move order from '{old_status}' to '{new_status}'.")
             if old_status == new_status:
-                return current, None
+                return current, None, None
 
             to_put = [current]
             if new_status in OrderStatus.STOCK_RESTORING and current.stock_committed:
@@ -65,20 +74,27 @@ class OrderService:
                 current.stock_committed = False
 
             current.order_status = new_status
-            to_put.append(
-                OrderStatusHistory(
-                    order_id=current.id, old_status=old_status, new_status=new_status, changed_by=changed_by, note=note
-                )
+            for field, value in tracking.items():
+                setattr(current, field, value)
+            history = OrderStatusHistory(
+                key=history_key,
+                order_id=current.id,
+                old_status=old_status,
+                new_status=new_status,
+                changed_by=changed_by,
+                note=note,
             )
+            to_put.append(history)
             ndb.put_multi(to_put)
-            return current, old_status
+            return current, old_status, history
 
-        updated, old_status = ndb.transaction(txn)
+        updated, old_status, history = ndb.transaction(txn)
         if old_status is None:
             return updated
 
         logger.info("Order status changed: order_number=%s %s -> %s by=%s", updated.order_number, old_status, new_status, changed_by)
-        EmailService.send_order_status_update(updated)
+        if notify:
+            EmailService.send_order_status_update(updated, old_status, new_status, history.id)
         return updated
 
     @classmethod
@@ -89,14 +105,20 @@ class OrderService:
 
     @classmethod
     def mark_paid(cls, order):
-        if order.payment_status == PaymentStatus.PAID:
-            return order
-
-        order.payment_status = PaymentStatus.PAID
-        order.put()
-        if order.order_status == OrderStatus.PENDING_PAYMENT:
-            order = cls.change_status(order, OrderStatus.PLACED, changed_by="system", note="Payment verified.", force=True)
-        EmailService.send_payment_confirmation(order)
+        """Callers must only get here after the payment was verified server
+        side (checkout signature check or signed webhook). This is the moment
+        an online order becomes real, so it's when the customer confirmation
+        and the owner alert go out — the outbox keeps the browser callback
+        and the webhook, which often race, from sending them twice."""
+        if order.payment_status != PaymentStatus.PAID:
+            order.payment_status = PaymentStatus.PAID
+            order.put()
+            if order.order_status == OrderStatus.PENDING_PAYMENT:
+                # The confirmation email below covers this transition.
+                order = cls.change_status(
+                    order, OrderStatus.PLACED, changed_by="system", note="Payment verified.", force=True, notify=False
+                )
+        EmailService.send_new_order_notifications(order)
         return order
 
     @classmethod

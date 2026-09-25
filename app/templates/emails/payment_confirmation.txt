@@ -1,0 +1,10 @@
+{% extends "emails/base_email.txt" %}
+{% import "emails/_components.txt" as ui %}
+{% block content %}{{ ui.intro(copy) }}
+
+Payment method: {{ payment_method_label }}
+Payment status: {{ payment_status_label }}
+Order status: {{ status_label }}
+
+{{ copy.button_label }}: {{ view_order_url }}
+{{ ui.note(copy) }}{% endblock %}

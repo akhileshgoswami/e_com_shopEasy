@@ -1,0 +1,6 @@
+{% extends "emails/base_email.txt" %}
+{% import "emails/_components.txt" as ui %}
+{% block content %}{{ ui.intro(copy) }}
+
+{{ copy.button_label }}: {{ shop_url }}
+{{ ui.note(copy) }}{% endblock %}

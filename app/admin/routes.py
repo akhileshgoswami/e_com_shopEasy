@@ -1,6 +1,6 @@
 from functools import wraps
 
-from flask import abort, flash, redirect, render_template, request, url_for
+from flask import abort, current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 
 from app.admin import admin_bp
@@ -548,13 +548,21 @@ def order_status_update(order_id):
                 return redirect(url_for("admin.order_detail", order_id=order.id))
             if reason != OrderStatus.OTHER_REASON:
                 note = f"{reason}: {note}" if note else reason
+        tracking = {
+            "tracking_number": (form.tracking_number.data or "").strip() or None,
+            "tracking_url": (form.tracking_url.data or "").strip() or None,
+            "estimated_delivery_date": form.estimated_delivery_date.data,
+        }
         try:
-            OrderService.change_status(order, form.new_status.data, changed_by=current_user.email, note=note or None)
-            flash("Order status updated.", "success")
+            OrderService.change_status(
+                order, form.new_status.data, changed_by=current_user.email, note=note or None, tracking=tracking
+            )
+            flash("Order status updated. The customer has been notified by email.", "success")
         except OrderTransitionError as exc:
             flash(str(exc), "danger")
     else:
-        flash("Invalid status selection.", "danger")
+        errors = [e for field in (form.tracking_url, form.tracking_number, form.estimated_delivery_date) for e in field.errors]
+        flash(errors[0] if errors else "Invalid status selection.", "danger")
     return redirect(url_for("admin.order_detail", order_id=order.id))
 
 
@@ -902,3 +910,94 @@ def content_edit(key):
         return redirect(url_for("admin.content_list"))
 
     return render_template("admin/content_form.html", form=form, item=item)
+
+
+# ---------- Email templates (wording of transactional emails) ----------
+
+@admin_bp.route("/emails")
+@admin_required
+def email_templates():
+    from app.services.email_template_service import EmailTemplateService
+
+    return render_template(
+        "admin/email_templates_list.html",
+        items=EmailTemplateService.list_all(),
+        mail_enabled=current_app.config.get("MAIL_ENABLED"),
+    )
+
+
+@admin_bp.route("/emails/<key>", methods=["GET", "POST"])
+@admin_required
+def email_template_edit(key):
+    from app.admin.forms import EmailTemplateForm
+    from app.services.email_service import EmailService
+    from app.services.email_template_service import (
+        FIELD_NAMES,
+        PLACEHOLDER_HELP,
+        EmailTemplateError,
+        EmailTemplateService,
+    )
+
+    try:
+        spec = EmailTemplateService.spec(key)
+    except EmailTemplateError:
+        abort(404)
+
+    form = EmailTemplateForm()
+    if request.method == "GET":
+        for name, value in EmailTemplateService.current(key).items():
+            getattr(form, name).data = value
+
+    action = request.form.get("action", "save")
+    draft = None
+    if form.validate_on_submit():
+        draft = {name: getattr(form, name).data for name in FIELD_NAMES}
+        errors = EmailTemplateService.validate(key, draft)
+        for name, error in errors.items():
+            getattr(form, name).errors.append(error)
+        if not errors and action == "save":
+            EmailTemplateService.save(key, draft)
+            flash(f"“{spec['name']}” email saved. New emails use this wording right away.", "success")
+            return redirect(url_for("admin.email_template_edit", key=key))
+        if not errors and action == "test":
+            subject, html, text = EmailTemplateService.preview(key, raw=draft)
+            if EmailService.deliver_rendered("[Test] " + subject, [current_user.email], html, text, kind=f"test:{key}"):
+                flash(f"Test email sent to {current_user.email} (with sample order data).", "success")
+            elif not EmailService.enabled():
+                flash("Email sending is turned off on this server (MAIL_ENABLED=false), so no test was sent.", "warning")
+            else:
+                flash("The test email could not be sent. Check the SMTP settings and the server log.", "danger")
+        if errors:
+            draft = None
+    elif request.method == "POST":
+        flash("Please fix the highlighted fields.", "danger")
+
+    # Preview shows unsaved edits after "Preview", otherwise the saved wording.
+    subject, html, text = EmailTemplateService.preview(key, raw=draft)
+    return render_template(
+        "admin/email_template_form.html",
+        key=key,
+        spec=spec,
+        form=form,
+        placeholders=[(p, PLACEHOLDER_HELP.get(p, "")) for p in spec["placeholders"]],
+        defaults=spec["defaults"],
+        customized=bool(EmailTemplateService.overrides(key)),
+        preview_subject=subject,
+        preview_html=html,
+        preview_text=text,
+        is_draft_preview=draft is not None and action == "preview",
+    )
+
+
+@admin_bp.route("/emails/<key>/reset", methods=["POST"])
+@admin_required
+def email_template_reset(key):
+    from app.services.email_template_service import EmailTemplateError, EmailTemplateService
+
+    try:
+        spec = EmailTemplateService.spec(key)
+    except EmailTemplateError:
+        abort(404)
+    EmailTemplateService.reset(key)
+    flash(f"“{spec['name']}” email reset to the default wording.", "info")
+    return redirect(url_for("admin.email_template_edit", key=key))

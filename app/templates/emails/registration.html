@@ -1,5 +1,8 @@
 {% extends "emails/base_email.html" %}
-{% block email_body %}
-<h2>Welcome, {{ user.name }}!</h2>
-<p>Thanks for creating an account with us. You can now shop, track orders, and manage your addresses from your profile.</p>
+{% import "emails/_components.html" as ui with context %}
+{% block preheader %}Your {{ store_name }} account is ready.{% endblock %}
+{% block content %}
+{{ ui.intro(copy) }}
+{{ ui.button(shop_url, copy.button_label) }}
+{{ ui.note(copy) }}
 {% endblock %}

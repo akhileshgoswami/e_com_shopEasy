@@ -1,5 +1,0 @@
-{% extends "emails/base_email.html" %}
-{% block email_body %}
-<h2>Order update &mdash; {{ order.order_number }}</h2>
-<p>Hi {{ order.user.name }}, your order status has changed to <strong>{{ order.order_status.replace('_',' ')|title }}</strong>.</p>
-{% endblock %}

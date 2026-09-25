@@ -1,0 +1,40 @@
+{% extends "emails/base_email.txt" %}
+{% import "emails/_components.txt" as ui %}
+{% block content %}{{ ui.intro(copy) }}
+
+Order number: #{{ order.order_number }}
+Order date: {{ order.created_at|ist }}
+Order total: {{ ui.money(order.total_amount) }}
+Payment method: {{ payment_method_label }}
+Payment status: {{ payment_status_label }}
+Order status: {{ status_label }}
+
+{{ copy.button_label }}: {{ admin_order_url }}
+
+CUSTOMER
+Name: {{ customer_name }}
+Email: {{ customer_email or "-" }}
+Phone: {{ customer_phone or "-" }}
+{% if order.notes %}
+CUSTOMER NOTES
+{{ order.notes }}
+{% endif %}
+ITEMS
+{% for item in items -%}
+- {{ item.name }}{% if item.size %} (Size: {{ item.size }}){% endif %} [SKU {{ item.sku }}]: {{ item.quantity }} x {{ ui.money(item.unit_price) }} = {{ ui.money(item.subtotal) }}
+{% endfor %}
+Subtotal: {{ ui.money(order.subtotal) }}
+{% if order.discount %}Discount{% if order.coupon_code %} ({{ order.coupon_code }}){% endif %}: -{{ ui.money(order.discount) }}
+{% endif -%}
+Shipping: {{ ui.money(order.shipping_charge) }}
+{% if order.tax %}Tax: {{ ui.money(order.tax) }}
+{% endif -%}
+Total: {{ ui.money(order.total_amount) }}
+
+SHIPPING ADDRESS
+{{ order.shipping_name }}
+{{ order.shipping_address }}
+{{ order.shipping_city }}, {{ order.shipping_state }} {{ order.shipping_postal_code }}
+{{ order.shipping_country }}
+Phone: {{ order.shipping_phone }}
+{{ ui.note(copy) }}{% endblock %}

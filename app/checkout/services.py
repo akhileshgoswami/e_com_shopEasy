@@ -250,7 +250,9 @@ class CheckoutService:
 
         logger.info("Order created: order_number=%s user_id=%s method=%s", order.order_number, user.id, payment_method)
 
+        # Online orders are confirmed only once Razorpay payment is verified
+        # (OrderService.mark_paid); a COD order is real as soon as it commits.
         if payment_method == PaymentMethod.COD:
-            EmailService.send_order_confirmation(order)
+            EmailService.send_new_order_notifications(order)
 
         return order

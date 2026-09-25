@@ -1,6 +1,6 @@
 from urllib.parse import urlparse
 
-from flask import abort, current_app, flash, redirect, render_template, request, session, url_for
+from flask import abort, current_app, flash, make_response, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 
 from app.auth import auth_bp
@@ -9,13 +9,14 @@ from app.cart.services import CartError, CartService
 from app.auth.forms import (
     AddressForm,
     ChangePasswordForm,
+    PASSWORD_HINT,
     ForgotPasswordForm,
     LoginForm,
     ProfileForm,
     RegisterForm,
     ResetPasswordForm,
 )
-from app.auth.services import AuthError, AuthenticationService
+from app.auth.services import AuthError, AuthenticationService, ResetTokenError
 from app.extensions import limiter, oauth
 from app.models import Address, Order
 from app.services.email_service import EmailService
@@ -178,40 +179,51 @@ def logout():
     return redirect(url_for("shop.home"))
 
 
+def _no_store(response):
+    """Reset pages carry a secret in their URL: keep them out of caches and
+    out of the Referer header sent to third-party assets."""
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    return response
+
+
 @auth_bp.route("/forgot-password", methods=["GET", "POST"])
-@limiter.limit("5 per hour")
+@limiter.limit("5 per 15 minutes; 20 per day", methods=["POST"])
 def forgot_password():
     form = ForgotPasswordForm()
     if form.validate_on_submit():
-        from app.models import User
+        user, token = AuthenticationService.request_password_reset(form.email.data)
+        if token:
+            EmailService.send_password_reset(user, token)
+        # Same response whether or not the account exists.
+        return redirect(url_for("auth.forgot_password", sent=1))
 
-        user = User.by_email(form.email.data)
-        if user:
-            token = AuthenticationService.generate_reset_token(user)
-            reset_url = url_for("auth.reset_password", token=token, _external=True)
-            EmailService.send_password_reset(user, reset_url)
-        flash("If that email exists, a reset link has been sent.", "info")
-        return redirect(url_for("auth.login"))
-
-    return render_template("auth/forgot_password.html", form=form)
+    return render_template("auth/forgot_password.html", form=form, sent=bool(request.args.get("sent")))
 
 
 @auth_bp.route("/reset-password/<token>", methods=["GET", "POST"])
-@limiter.limit("10 per hour")
+@limiter.limit("10 per 15 minutes", methods=["POST"])
+@limiter.limit("30 per hour", methods=["GET"])
 def reset_password(token):
     try:
         user = AuthenticationService.verify_reset_token(token)
-    except AuthError as exc:
-        flash(str(exc), "danger")
-        return redirect(url_for("auth.forgot_password"))
+    except ResetTokenError as exc:
+        return _no_store(make_response(render_template("auth/reset_password.html", token_error=exc.state, error_message=str(exc)), 400))
 
     form = ResetPasswordForm()
+    form.account_email = user.email
     if form.validate_on_submit():
-        AuthenticationService.reset_password(user, form.password.data)
-        flash("Your password has been reset. Please log in.", "success")
+        try:
+            user = AuthenticationService.reset_password_with_token(token, form.password.data)
+        except ResetTokenError as exc:
+            return _no_store(make_response(render_template("auth/reset_password.html", token_error=exc.state, error_message=str(exc)), 400))
+        EmailService.send_password_changed(user)
+        if current_user.is_authenticated:
+            logout_user()
+        flash("Your password has been reset. Please log in with your new password.", "success")
         return redirect(url_for("auth.login"))
 
-    return render_template("auth/reset_password.html", form=form)
+    return _no_store(make_response(render_template("auth/reset_password.html", form=form, password_hint=PASSWORD_HINT)))
 
 
 @auth_bp.route("/profile", methods=["GET", "POST"])
@@ -234,13 +246,20 @@ def profile():
 @login_required
 def change_password():
     form = ChangePasswordForm()
+    form.account_email = current_user.email
     if form.validate_on_submit():
+        user = current_user._get_current_object()
         try:
-            AuthenticationService.change_password(current_user, form.current_password.data, form.new_password.data)
+            AuthenticationService.change_password(user, form.current_password.data, form.new_password.data)
         except AuthError as exc:
             flash(str(exc), "danger")
         else:
-            flash("Password changed successfully.", "success")
+            # The session id changed with the password; re-issue this
+            # session's login so only the *other* devices are signed out.
+            remember_cookie = current_app.config.get("REMEMBER_COOKIE_NAME", "remember_token")
+            login_user(user, remember=bool(request.cookies.get(remember_cookie)))
+            EmailService.send_password_changed(user)
+            flash("Password changed successfully. You've been signed out on other devices.", "success")
     else:
         for errors in form.errors.values():
             for error in errors:

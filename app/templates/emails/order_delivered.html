@@ -1,0 +1,13 @@
+{% extends "emails/base_email.html" %}
+{% import "emails/_components.html" as ui with context %}
+{% block preheader %}Your order #{{ order.order_number }} has been delivered. Enjoy!{% endblock %}
+{% block content %}
+{{ ui.intro(copy) }}
+{% if order.tracking_number %}
+{{ ui.details([("Tracking number", order.tracking_number)]) }}
+{% endif %}
+{{ ui.button(view_order_url, copy.button_label) }}
+{{ ui.order_summary(order, items) }}
+{{ ui.note(copy) }}
+<p style="margin:16px 0 0 0;"><a href="{{ shop_url }}" style="color:{{ brand.accent }};font-weight:600;">Continue shopping &rarr;</a></p>
+{% endblock %}

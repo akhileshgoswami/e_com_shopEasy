@@ -55,11 +55,24 @@ class BaseConfig:
 
     MAIL_SERVER = os.environ.get("MAIL_SERVER")
     MAIL_PORT = int(os.environ.get("MAIL_PORT", 587))
+    # STARTTLS on 587 (MAIL_USE_TLS) or implicit TLS on 465 (MAIL_USE_SSL) —
+    # never both. Certificates are always verified.
     MAIL_USE_TLS = _bool(os.environ.get("MAIL_USE_TLS"), True)
+    MAIL_USE_SSL = _bool(os.environ.get("MAIL_USE_SSL"), False)
     MAIL_USERNAME = os.environ.get("MAIL_USERNAME")
     MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD")
     MAIL_DEFAULT_SENDER = os.environ.get("MAIL_DEFAULT_SENDER", "no-reply@example.com")
-    MAIL_ENABLED = _bool(os.environ.get("MAIL_ENABLED"), False)
+    # Sending is on whenever an SMTP server is configured, unless explicitly
+    # switched off; with it off, emails are only logged.
+    MAIL_ENABLED = _bool(os.environ.get("MAIL_ENABLED"), bool(os.environ.get("MAIL_SERVER")))
+    MAIL_TIMEOUT_SECONDS = int(os.environ.get("MAIL_TIMEOUT_SECONDS", 15))
+    # New-order notifications; several addresses may be separated by "," or ";".
+    OWNER_EMAIL = os.environ.get("OWNER_EMAIL", "")
+
+    PASSWORD_RESET_TOKEN_EXPIRY_MINUTES = int(os.environ.get("PASSWORD_RESET_TOKEN_EXPIRY_MINUTES", 30))
+    # Per-account cap on reset emails, enforced in the database so it holds
+    # across every Cloud Run instance (the IP limiter is per-instance).
+    PASSWORD_RESET_MAX_PER_HOUR = int(os.environ.get("PASSWORD_RESET_MAX_PER_HOUR", 3))
 
     RATELIMIT_STORAGE_URI = os.environ.get("RATELIMIT_STORAGE_URI", "memory://")
     RATELIMIT_HEADERS_ENABLED = True
@@ -102,6 +115,11 @@ class TestingConfig(BaseConfig):
     SECRET_KEY = "test-secret-key"
     RATELIMIT_ENABLED = False
     MAIL_ENABLED = False
+    # Flask-Mail never opens an SMTP connection in tests; messages are only
+    # recorded (mail.record_messages()).
+    MAIL_SUPPRESS_SEND = True
+    OWNER_EMAIL = "owner@example.com"
+    BASE_URL = "https://shop.example.com"
     RAZORPAY_KEY_ID = "rzp_test_key_id"
     RAZORPAY_KEY_SECRET = "rzp_test_key_secret"
     RAZORPAY_WEBHOOK_SECRET = "test_webhook_secret"

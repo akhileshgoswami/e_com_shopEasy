@@ -1,0 +1,32 @@
+{% extends "admin/base.html" %}
+{% block title %}Email templates - Admin{% endblock %}
+{% block admin_content %}
+<h1 class="h3 mb-2">Email templates</h1>
+<p class="text-muted mb-3">Change the wording of the emails your store sends. Order details, links and security notices are added automatically; the look follows your logo and theme colour from <a href="{{ url_for('admin.settings') }}">Settings</a>.</p>
+
+{% if not mail_enabled %}
+<div class="alert alert-warning small"><i class="bi bi-exclamation-triangle"></i> Email sending is turned off on this server (<code>MAIL_ENABLED=false</code>). Emails are only logged until SMTP is configured.</div>
+{% endif %}
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table align-middle mb-0">
+      <thead><tr><th>Email</th><th>Sent to</th><th>Subject</th><th></th></tr></thead>
+      <tbody>
+      {% for item in items %}
+        <tr>
+          <td>
+            <span class="fw-semibold">{{ item.name }}</span>
+            {% if item.customized %}<span class="badge text-bg-primary ms-1">customized</span>{% else %}<span class="badge bg-light text-dark border ms-1">default</span>{% endif %}
+            <div class="small text-muted">{{ item.trigger }}</div>
+          </td>
+          <td class="small text-nowrap">{{ item.audience }}</td>
+          <td class="small text-muted" style="max-width:320px;">{{ item.subject }}</td>
+          <td class="text-end"><a href="{{ url_for('admin.email_template_edit', key=item.key) }}" class="btn btn-sm btn-outline-secondary text-nowrap">Edit &amp; preview</a></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -24,6 +24,7 @@ class OrderStatus:
     PROCESSING = "processing"
     PACKED = "packed"
     SHIPPED = "shipped"
+    OUT_FOR_DELIVERY = "out_for_delivery"
     DELIVERED = "delivered"
     CANCELLED = "cancelled"
     FAILED = "failed"
@@ -37,6 +38,7 @@ class OrderStatus:
         PROCESSING,
         PACKED,
         SHIPPED,
+        OUT_FOR_DELIVERY,
         DELIVERED,
         CANCELLED,
         FAILED,
@@ -73,6 +75,25 @@ class OrderStatus:
         OTHER_REASON,
     )
 
+    LABELS = {
+        PENDING_PAYMENT: "Awaiting payment",
+        PLACED: "Placed",
+        CONFIRMED: "Confirmed",
+        PROCESSING: "Processing",
+        PACKED: "Packed",
+        SHIPPED: "Shipped",
+        OUT_FOR_DELIVERY: "Out for delivery",
+        DELIVERED: "Delivered",
+        CANCELLED: "Cancelled",
+        FAILED: "Failed",
+        RETURNED: "Returned",
+        REFUNDED: "Refunded",
+    }
+
+    @classmethod
+    def label(cls, status):
+        return cls.LABELS.get(status) or (status or "").replace("_", " ").title()
+
     # allowed forward transitions for admin-driven status changes
     TRANSITIONS = {
         PENDING_PAYMENT: (PLACED, FAILED, CANCELLED),
@@ -80,7 +101,8 @@ class OrderStatus:
         CONFIRMED: (PROCESSING, CANCELLED),
         PROCESSING: (PACKED, CANCELLED),
         PACKED: (SHIPPED, CANCELLED),
-        SHIPPED: (DELIVERED, RETURNED),
+        SHIPPED: (OUT_FOR_DELIVERY, DELIVERED, RETURNED),
+        OUT_FOR_DELIVERY: (DELIVERED, RETURNED),
         DELIVERED: (RETURNED,),
         CANCELLED: (),
         FAILED: (PLACED,),
@@ -120,6 +142,11 @@ class Order(BaseModel):
     razorpay_signature = ndb.TextProperty()
 
     notes = ndb.TextProperty()
+
+    # Filled in by an admin when the parcel ships; all optional.
+    tracking_number = ndb.TextProperty()
+    tracking_url = ndb.TextProperty()
+    estimated_delivery_date = ndb.DateProperty(indexed=False)
 
     @property
     def user(self):

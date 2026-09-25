@@ -1,0 +1,32 @@
+{% extends "emails/base_email.html" %}
+{% import "emails/_components.html" as ui with context %}
+{% block preheader %}New order #{{ order.order_number }} from {{ customer_name }} — {{ ui.money(order.total_amount) }} ({{ payment_method_label }}, {{ payment_status_label }}).{% endblock %}
+{% block content %}
+{{ ui.intro(copy) }}
+{{ ui.details([
+  ("Order number", "#" ~ order.order_number),
+  ("Order date", order.created_at|ist),
+  ("Order total", ui.money(order.total_amount)),
+  ("Payment method", payment_method_label),
+  ("Payment status", payment_status_label),
+  ("Order status", status_label),
+]) }}
+{{ ui.button(admin_order_url, copy.button_label) }}
+{{ ui.section_title("Customer") }}
+{{ ui.details([
+  ("Name", customer_name),
+  ("Email", customer_email),
+  ("Phone", customer_phone),
+]) }}
+{% if order.notes %}
+{{ ui.section_title("Customer notes") }}
+{% call ui.notice("info") %}{{ order.notes }}{% endcall %}
+{% endif %}
+{{ ui.section_title("Items") }}
+{{ ui.order_items(items, show_sku=true) }}
+{{ ui.totals(order) }}
+{{ ui.section_title("Shipping address") }}
+{{ ui.shipping_address(order) }}
+{{ ui.note(copy) }}
+{% endblock %}
+{% block footer_note %}You're receiving this because this address is set as a store owner notification recipient (OWNER_EMAIL). The admin link requires an admin login.{% endblock %}

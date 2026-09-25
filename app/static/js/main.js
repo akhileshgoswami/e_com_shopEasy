@@ -423,3 +423,95 @@ document.addEventListener("submit", function (event) {
     .catch(() => form.submit())
     .finally(() => { button.disabled = false; });
 });
+
+// Auth forms (forgot / reset password): client-side validation that mirrors
+// the server rules, a loading state on submit, and show/hide password.
+(function () {
+  "use strict";
+
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  function passwordRules(form) {
+    const password = form.querySelector("input[name=password]");
+    const confirm = form.querySelector("input[name=confirm_password]");
+    if (!password || !confirm) return null;
+    const value = password.value;
+    return {
+      length: value.length >= 8 && value.length <= 128,
+      letter: /[A-Za-z]/.test(value),
+      number: /\d/.test(value),
+      match: value.length > 0 && value === confirm.value,
+    };
+  }
+
+  function renderRules(form) {
+    const rules = passwordRules(form);
+    const list = form.querySelector("[data-password-rules]");
+    if (!rules || !list) return rules;
+    Object.entries(rules).forEach(([name, ok]) => {
+      const item = list.querySelector(`[data-rule="${name}"]`);
+      if (!item) return;
+      item.classList.toggle("text-success", ok);
+      item.classList.toggle("text-muted", !ok);
+      item.querySelector("i").className = "bi " + (ok ? "bi-check-circle-fill" : "bi-circle");
+    });
+    return rules;
+  }
+
+  document.querySelectorAll("[data-password-form]").forEach((form) => {
+    form.addEventListener("input", () => renderRules(form));
+    renderRules(form);
+  });
+
+  document.querySelectorAll("[data-password-toggle]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const input = document.getElementById(button.dataset.passwordToggle);
+      if (!input) return;
+      const show = input.type === "password";
+      input.type = show ? "text" : "password";
+      button.setAttribute("aria-pressed", show ? "true" : "false");
+      button.setAttribute("aria-label", show ? "Hide password" : "Show password");
+      button.querySelector("i").className = "bi " + (show ? "bi-eye-slash" : "bi-eye");
+    });
+  });
+
+  document.querySelectorAll("[data-loading-form]").forEach((form) => {
+    form.addEventListener("submit", (event) => {
+      const email = form.querySelector("input[type=email]");
+      if (email) {
+        const valid = EMAIL_RE.test(email.value.trim());
+        email.classList.toggle("is-invalid", !valid);
+        const hint = form.querySelector("[data-client-error]");
+        if (hint) hint.classList.toggle("d-block", !valid);
+        if (!valid) {
+          event.preventDefault();
+          email.focus();
+          return;
+        }
+      }
+      const rules = form.hasAttribute("data-password-form") ? renderRules(form) : null;
+      if (rules && !Object.values(rules).every(Boolean)) {
+        event.preventDefault();
+        form.querySelector("input[name=password]").focus();
+        return;
+      }
+      const button = form.querySelector("button[type=submit]");
+      if (button) {
+        button.dataset.originalHtml = button.innerHTML;
+        button.disabled = true;
+        button.innerHTML =
+          '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>' +
+          (button.dataset.loadingText || "Please wait…");
+      }
+    });
+  });
+
+  // Coming back via the browser's back button restores the page from cache
+  // with the button still spinning.
+  window.addEventListener("pageshow", () => {
+    document.querySelectorAll("[data-loading-form] button[type=submit][data-original-html]").forEach((button) => {
+      button.disabled = false;
+      button.innerHTML = button.dataset.originalHtml;
+    });
+  });
+})();

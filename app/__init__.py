@@ -26,6 +26,7 @@ def create_app(config_name=None):
     csrf.init_app(app)
     limiter.init_app(app)
     mail.init_app(app)
+    _validate_email_config(app)
     init_storage(app)
     _register_google_oauth(app)
 
@@ -53,6 +54,12 @@ def _configure_logging(app):
     logging.getLogger("app").propagate = False
 
 
+def _validate_email_config(app):
+    from app.services.email_service import EmailService
+
+    EmailService.validate_config(app)
+
+
 def _register_google_oauth(app):
     oauth.init_app(app)
     app.config["GOOGLE_OAUTH_ENABLED"] = bool(
@@ -75,7 +82,8 @@ def _register_login_manager(app):
 
     @login_manager.user_loader
     def load_user(user_id):
-        return User.find(user_id)
+        # Rejects sessions issued before the account's last password change.
+        return User.from_session_id(user_id)
 
     from flask import session
     from flask_login import user_logged_in
@@ -355,6 +363,36 @@ def _register_cli(app):
 
             Cart(id=user.id, user_id=user.id).put()
             click.echo(f"Admin user '{email}' created.")
+
+    @app.cli.command("send-pending-emails")
+    @with_ndb
+    def send_pending_emails():
+        """Retry notification emails that failed or got stuck (safe to run
+        repeatedly, e.g. from Cloud Scheduler; nothing is sent twice)."""
+        from app.services.email_service import EmailService
+
+        if not app.config.get("MAIL_ENABLED"):
+            click.echo("MAIL_ENABLED is false; nothing sent.", err=True)
+            sys.exit(1)
+        sent, failed = EmailService.retry_pending()
+        click.echo(f"Pending emails: {sent} sent, {failed} failed.")
+        if failed:
+            sys.exit(1)
+
+    @app.cli.command("send-test-email")
+    @click.argument("recipient")
+    @with_ndb
+    def send_test_email(recipient):
+        """Send a sample email to RECIPIENT to check the SMTP settings."""
+        from app.services.email_template_service import EmailTemplateService
+        from app.services.email_service import EmailService
+
+        with app.test_request_context():
+            subject, html, text = EmailTemplateService.preview("order_confirmation")
+            ok = EmailService.deliver_rendered("[SMTP test] " + subject, [recipient], html, text, kind="smtp_test")
+        click.echo("Test email sent." if ok else "Test email failed; see the log output above.")
+        if not ok:
+            sys.exit(1)
 
     @app.cli.command("seed-data")
     @with_ndb

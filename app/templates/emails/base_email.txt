@@ -1,0 +1,6 @@
+{% block content %}{% endblock %}
+
+--
+{{ store_name }}
+Need help? {{ support_email }}{% if support_phone %} | {{ support_phone }}{% endif %}
+{{ home_url }}
